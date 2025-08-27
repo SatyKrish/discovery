@@ -1,3 +1,4 @@
+'use client';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -60,8 +61,8 @@ export type Artifact = {
   type: "chart.vegaLite" | "table.json" | "file";
   title: string;
   uri?: string;
-  json?: any;
-  meta?: Record<string, any>;
+  json?: unknown;
+  meta?: Record<string, unknown>;
   pinned?: boolean;
 };
 
@@ -97,14 +98,19 @@ export const NoopProvider: DiscoveryAgentDataProvider = {
   async togglePin() { if (typeof window !== "undefined") console.warn("[DiscoveryAgentUI] No provider supplied: togglePin() ignored"); },
 };
 
-function isValidProvider(p: any): p is DiscoveryAgentDataProvider {
-  return !!p && ["listChats", "listMessages", "sendMessage", "togglePin"].every((m) => typeof p[m] === "function");
+function isValidProvider(p: unknown): p is DiscoveryAgentDataProvider {
+  return (
+    !!p &&
+    ["listChats", "listMessages", "sendMessage", "togglePin"].every(
+      (m) => typeof (p as Record<string, unknown>)[m] === "function"
+    )
+  );
 }
 
 /***********************************
  * THEME-AWARE PRIMITIVES
  ***********************************/
-function ThemedLineChart({ data, height = "100%" }: { data: any[]; height?: number | string }) {
+function ThemedLineChart({ data, height = "100%" }: { data: unknown[]; height?: number | string }) {
   const axisStroke = "hsl(var(--muted-foreground))";
   const gridStroke = "hsl(var(--border))";
   const lineStroke = "hsl(var(--foreground))";
@@ -172,7 +178,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
           {copied ? <CheckIcon className="h-4 w-4"/> : <CopyIcon className="h-4 w-4"/>}
         </Button>
       </div>
-      <Highlight theme={themes.oneDark} code={code} language={(language as any) ?? "tsx"}>
+      <Highlight theme={themes.oneDark} code={code} language={language ?? "tsx"}>
         {({ className, style, tokens, getLineProps, getTokenProps }) => (
           <pre className={cn(className, "p-4 overflow-auto text-sm leading-6 bg-muted/60") } style={style}>
             {tokens.map((line, i) => (
@@ -191,27 +197,32 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 
 function MarkdownMessage({ children }: { children: string }) {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw]}
-      components={{
-        code({ inline, className, children: c }) {
-          const match = /language-(\w+)/.exec(className || "");
-          const code = String(c).replace(/\n$/, "");
-          if (inline) {
-            return <code className="px-1.5 py-0.5 rounded-md bg-muted text-foreground text-[13px]">{code}</code>;
-          }
-          return <CodeBlock code={code} language={match?.[1]} />;
-        },
-        table({ children }) { return <div className="w-full overflow-x-auto"><table className="w-full text-sm border-collapse">{children}</table></div>; },
-        th({ children }) { return <th className="border-b text-left px-2 py-1">{children}</th>; },
-        td({ children }) { return <td className="border-b px-2 py-1 align-top">{children}</td>; },
-        a({ href, children }) { return <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2">{children}</a>; },
-      }}
-      className="prose prose-zinc dark:prose-invert max-w-none prose-code:before:content-none prose-code:after:content-none"
-    >
-      {children}
-    </ReactMarkdown>
+    <div className="prose prose-zinc dark:prose-invert max-w-none prose-code:before:content-none prose-code:after:content-none">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={{
+          code({ inline, className, children: c }: { inline?: boolean; className?: string; children?: React.ReactNode }) {
+            const match = /language-(\w+)/.exec(className || "");
+            const code = String(c).replace(/\n$/, "");
+            if (inline) {
+              return <code className="px-1.5 py-0.5 rounded-md bg-muted text-foreground text-[13px]">{code}</code>;
+            }
+            return <CodeBlock code={code} language={match?.[1]} />;
+          },
+          table({ children }) {
+            return <div className="w-full overflow-x-auto"><table className="w-full text-sm border-collapse">{children}</table></div>;
+          },
+          th({ children }) { return <th className="border-b text-left px-2 py-1">{children}</th>; },
+          td({ children }) { return <td className="border-b px-2 py-1 align-top">{children}</td>; },
+          a({ href, children }) {
+            return <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2">{children}</a>;
+          },
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -315,11 +326,14 @@ function ThemeToggleInline() {
 function ArtifactPreview({ artifact, onExpand, onPin }: { artifact: Artifact; onExpand: (a: Artifact) => void; onPin: (id: string) => void }) {
   const renderThumb = () => {
     if (artifact.type === "chart.vegaLite") {
-      if (!artifact.json?.series || artifact.json.series.length === 0) return <EmptyState title="No chart data" subtitle="Agent will render series once available." />;
-      return <div className="h-32"><ThemedLineChart data={artifact.json.series} height="100%" /></div>;
+      const seriesData = (artifact.json as { series?: unknown[] } | undefined)?.series;
+      if (!seriesData || seriesData.length === 0) return <EmptyState title="No chart data" subtitle="Agent will render series once available." />;
+      return <div className="h-32"><ThemedLineChart data={seriesData} height="100%" /></div>;
     }
     if (artifact.type === "table.json") {
-      const rows: any[] = Array.isArray(artifact.json) ? artifact.json.slice(0, 3) : [];
+      const rows = Array.isArray(artifact.json)
+        ? (artifact.json.slice(0, 3) as Array<Record<string, unknown>>)
+        : [];
       if (rows.length === 0) return <EmptyState title="No rows" subtitle="Agent will attach table rows." />;
       return (
         <Table>
@@ -331,9 +345,9 @@ function ArtifactPreview({ artifact, onExpand, onPin }: { artifact: Artifact; on
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((r: any, i: number) => (
+            {rows.map((r, i) => (
               <TableRow key={i}>
-                {Object.values(r).map((v: any, j: number) => (
+                {Object.values(r).map((v, j) => (
                   <TableCell key={j} className="text-xs text-foreground text-right first:text-left tabular-nums">{typeof v === "number" ? v.toLocaleString() : String(v)}</TableCell>
                 ))}
               </TableRow>
@@ -499,9 +513,9 @@ export default function DiscoveryAgentUI({ provider, initialDark = true }: { pro
     setIsStreaming(true);
     try {
       await safeProvider.sendMessage({ chatId: selectedChatId, text, pinNext: (document.getElementById("pin-next") as HTMLInputElement)?.checked }, ac.signal);
-    } catch (err: any) {
-      if (err?.name !== "AbortError") console.error("[DiscoveryAgentUI] sendMessage failed:", err);
-      setProviderWarning("Provider.sendMessage failed: " + (err?.message || String(err)));
+    } catch (err: unknown) {
+      if (!(err instanceof Error) || err.name !== "AbortError") console.error("[DiscoveryAgentUI] sendMessage failed:", err);
+      setProviderWarning("Provider.sendMessage failed: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsStreaming(false);
       refreshMessages(selectedChatId);
@@ -565,7 +579,7 @@ export default function DiscoveryAgentUI({ provider, initialDark = true }: { pro
           {providerWarning && <InlineWarning message={providerWarning} />}
 
           {/* Thread */}
-          <ScrollArea ref={scrollRef as any} className="h-[calc(100vh-11rem)] px-4"> 
+          <ScrollArea ref={scrollRef} className="h-[calc(100vh-11rem)] px-4">
             <div className="mx-auto w-full max-w-[920px] py-6 space-y-6">
               {loadingMessages && <LoadingRows rows={8} />}
               {!loadingMessages && messages.length === 0 && (<EmptyState title="Start the conversation." subtitle="Ask a question or paste some data." />)}

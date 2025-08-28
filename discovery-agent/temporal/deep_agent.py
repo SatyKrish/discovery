@@ -136,9 +136,16 @@ async def run_agent(
     """Execute the DeepAgent loop and return the final response text.
 
     Additional tools from ``tools`` and ``mcp_endpoints`` are merged with the
-    agent's built-ins before the model is bound.  Tool execution can be
-    restricted via ``allow_tools`` and inspected or modified with the
-    ``on_tool_call`` callback.
+    agent's built-ins before the model is bound.
+
+    Args:
+        allow_tools: Optional iterable of tool names that may be executed. If
+            provided, any tool not in this allowlist will be skipped and a
+            ``ToolMessage`` noting the block will be appended to the state.
+        on_tool_call: Optional callback invoked before each tool execution. It
+            receives the tool name and argument dictionary and returns a tuple
+            ``(allowed, new_args)``. When ``allowed`` is ``False`` the tool call
+            is denied and a corresponding ``ToolMessage`` is recorded.
     """
 
     state: AgentState = (
@@ -321,7 +328,9 @@ def create_deep_agent(
 
     Parameters mirror those of :func:`run_agent` but are applied up-front so
     callers need only provide the question (and optional instructions) each
-    time the returned callable is invoked.
+    time the returned callable is invoked.  The resulting callable still
+    accepts ``allow_tools`` and ``on_tool_call`` to control tool execution at
+    runtime.
     """
 
     subagent_cfg = subagents or SUBAGENTS

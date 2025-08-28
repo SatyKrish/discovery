@@ -104,28 +104,30 @@ async def test_create_deep_agent_applies_base_prompt():
 @pytest.mark.asyncio
 async def test_run_query_forwards_tools_and_endpoints(monkeypatch):
     called: dict[str, Any] = {}
-
-    async def stub_run_agent(question, instructions="", **kwargs):
-        called["args"] = (question, instructions)
-        called["kwargs"] = kwargs
-        return "ok"
-
     dummy_tool = object()
 
     def stub_load_tool(spec: str):
         called.setdefault("loaded", []).append(spec)
         return dummy_tool
 
-    monkeypatch.setattr(temporal_workflow, "run_agent", stub_run_agent)
+    async def stub_agent(question, instructions="", **kwargs):
+        called["agent_args"] = (question, instructions)
+        return "ok"
+
+    def stub_factory(**kwargs):
+        called["factory_kwargs"] = kwargs
+        return stub_agent
+
     monkeypatch.setattr(temporal_workflow, "_load_tool", stub_load_tool)
+    monkeypatch.setattr(temporal_workflow, "create_deep_agent", stub_factory)
 
     result = await temporal_workflow.run_query(
         "Q", "I", tools=["pkg:tool"], mcp_endpoints=["http://server"]
     )
     assert result == "ok"
-    assert called["args"] == ("Q", "I")
-    assert called["kwargs"]["tools"] == [dummy_tool]
-    assert called["kwargs"]["mcp_endpoints"] == ["http://server"]
+    assert called["agent_args"] == ("Q", "I")
+    assert called["factory_kwargs"]["tools"] == [dummy_tool]
+    assert called["factory_kwargs"]["mcp_endpoints"] == ["http://server"]
     assert called["loaded"] == ["pkg:tool"]
 
 

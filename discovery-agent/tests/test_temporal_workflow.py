@@ -23,8 +23,13 @@ async def _wait_condition(cond):
 
 
 async def _execute_activity(fn, *args, **kwargs):
+    # Support Temporal SDK style: execute_activity(activity, *, args=[...], ...)
+    if 'args' in kwargs and isinstance(kwargs['args'], (list, tuple)):
+        call_args = kwargs['args']
+    else:
+        call_args = args
     # Ignore Temporal activity options such as timeouts
-    return await fn(*args)
+    return await fn(*call_args)
 
 
 workflow_stub.wait_condition = _wait_condition
@@ -125,7 +130,8 @@ async def test_activity_retry(monkeypatch):
     async def execute_with_retry(fn, *args, **kwargs):
         while True:
             try:
-                return await fn(*args)
+                call_args = kwargs.get('args', args)
+                return await fn(*call_args)
             except Exception:
                 if kwargs.get("_retry", 0) >= 1:
                     raise

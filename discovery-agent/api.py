@@ -9,8 +9,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from temporalio.client import Client
+from dotenv import load_dotenv
 
 from temporal.temporal_workflow import DeepAgentWorkflow
+
+# Load environment variables from .env if present
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Temporal client management
@@ -86,14 +90,17 @@ async def start_workflow(req: StartWorkflowRequest) -> WorkflowIdResponse:
     client = await get_temporal_client()
     wf_id = req.workflow_id or str(uuid.uuid4())
     try:
+        # start_workflow takes (workflow|name, first_arg?, *, args=[...], id=..., task_queue=...)
         handle = await client.start_workflow(
             DeepAgentWorkflow.run,
-            req.question,
-            req.instructions,
-            req.tools,
-            req.mcp_endpoints,
+            args=[
+                req.question,
+                req.instructions,
+                req.tools,
+                req.mcp_endpoints,
+            ],
             id=wf_id,
-            task_queue="deep-agent-task-queue",
+            task_queue=os.getenv("TEMPORAL_TASK_QUEUE", "deep-agent-task-queue"),
         )
     except Exception as exc:  # pragma: no cover - network or workflow errors
         raise HTTPException(status_code=500, detail=str(exc))

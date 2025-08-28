@@ -145,10 +145,8 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
 };
 
 // ---------------------------------------------------------------------------
-// FastAPI-backed provider
+// FastAPI-backed provider (via Next.js API proxies)
 // ---------------------------------------------------------------------------
-
-const FASTAPI_BASE = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:8000";
 
 const fastApiChats: Chat[] = [];
 
@@ -158,7 +156,7 @@ export const FastApiProvider: DiscoveryAgentDataProvider = {
   },
   async createChat(params, _signal?: AbortSignal) {
     try {
-      const res = await fetch(`${FASTAPI_BASE}/workflow/start`, {
+  const res = await fetch(`/api/workflow/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: params?.title ?? undefined }),
@@ -176,7 +174,7 @@ export const FastApiProvider: DiscoveryAgentDataProvider = {
   },
   async listMessages(chatId, _signal?: AbortSignal) {
     try {
-      const res = await fetch(`${FASTAPI_BASE}/workflow/${encodeURIComponent(chatId)}/history`);
+  const res = await fetch(`/api/workflow/${encodeURIComponent(chatId)}/history`);
       if (!res.ok) return [];
       const data: any = await res.json().catch(() => ({} as any));
       const history = Array.isArray(data?.history) ? (data.history as any[]) : [];
@@ -203,7 +201,7 @@ export const FastApiProvider: DiscoveryAgentDataProvider = {
     }
 
     try {
-      await fetch(`${FASTAPI_BASE}/workflow/${encodeURIComponent(body.chatId)}/prompt`, {
+      await fetch(`/api/workflow/${encodeURIComponent(body.chatId)}/prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: body.text }),
@@ -228,7 +226,7 @@ export const FastApiProvider: DiscoveryAgentDataProvider = {
   },
   async deleteChat(chatId, _signal?: AbortSignal) {
     try {
-      await fetch(`${FASTAPI_BASE}/workflow/${encodeURIComponent(chatId)}/end`, { method: "POST" });
+  await fetch(`/api/workflow/${encodeURIComponent(chatId)}/end`, { method: "POST" });
     } catch {
     }
     const idx = fastApiChats.findIndex((c) => c.id === chatId);

@@ -2,7 +2,14 @@ This UI uses Next.js and integrates Azure AD single sign-on via [NextAuth](https
 
 ## Getting Started
 
-During development (`npm run dev`) the chat is available without authentication. Azure AD login is enabled only in production builds (`npm start`), where the following environment variables must be provided:
+During development (`npm run dev`) the chat is available without authentication. Copy `.env.example` to `.env.local` and adjust as needed. Key variable:
+
+```bash
+# For Next.js API route proxies to the agent backend
+BACKEND_BASE_URL="http://localhost:8000"
+```
+
+Azure AD login is enabled only in production builds (`npm start`), where the following environment variables must be provided:
 
 ```bash
 AZURE_AD_CLIENT_ID="..."

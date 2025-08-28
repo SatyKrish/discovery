@@ -15,7 +15,11 @@ from typing import Any, Dict
 
 from temporalio import activity
 
-from tool_registry import TOOL_REGISTRY
+# Support both package and direct module imports
+try:
+    from .tool_registry import TOOL_REGISTRY
+except Exception:  # pragma: no cover - fallback for test import style
+    from tool_registry import TOOL_REGISTRY
 
 
 @dataclass
@@ -98,6 +102,10 @@ class AgentActivities:
     @activity.defn
     async def get_wf_env_vars(self) -> Dict[str, str]:
         """Return relevant environment variables for the workflow."""
-
-        keys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]
+        keys = [
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_DEPLOYMENT",
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_API_VERSION",
+        ]
         return {key: os.environ.get(key, "") for key in keys}

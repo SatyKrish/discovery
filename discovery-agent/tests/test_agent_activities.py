@@ -51,7 +51,14 @@ async def test_agent_validatePrompt_invalid_json():
 @pytest.mark.asyncio
 async def test_get_wf_env_vars(monkeypatch):
     activities = AgentActivities()
-    monkeypatch.setenv("OPENAI_API_KEY", "openai")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://x.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "dep")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "key")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview")
     result = await activities.get_wf_env_vars()
-    assert result == {"OPENAI_API_KEY": "openai", "ANTHROPIC_API_KEY": "anthropic"}
+    assert result == {
+        "AZURE_OPENAI_ENDPOINT": "https://x.openai.azure.com/",
+        "AZURE_OPENAI_DEPLOYMENT": "dep",
+        "AZURE_OPENAI_API_KEY": "key",
+        "AZURE_OPENAI_API_VERSION": "2024-05-01-preview",
+    }

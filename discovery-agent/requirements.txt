@@ -1,8 +1,8 @@
-deepagents
-langgraph-cli[inmem]
 duckdb
 pandas
 pyarrow
 langchain-core>=0.2.19
 langchain-openai
 python-dotenv
+temporalio>=1.4.0
+mcp>=1.13.1

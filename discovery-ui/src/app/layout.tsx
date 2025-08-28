@@ -12,7 +12,31 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply saved theme ASAP to avoid flash of incorrect theme */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('theme');
+                  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  var dark = stored ? stored === 'dark' : prefersDark;
+                  var root = document.documentElement;
+                  if (dark) {
+                    root.classList.add('dark');
+                    root.setAttribute('data-theme', 'dark');
+                  } else {
+                    root.classList.remove('dark');
+                    root.setAttribute('data-theme', 'light');
+                  }
+                } catch (e) {}
+              })();
+            `.trim(),
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

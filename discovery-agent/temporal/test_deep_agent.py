@@ -174,6 +174,57 @@ async def test_call_subagent_forwards_factory_config(monkeypatch):
     assert inner_kwargs.get("subagents") == sub_cfg
 
 
+class RouterModel:
+    """Model that omits the subagent name and relies on the router."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def bind_tools(self, tools):
+        self.tools = tools
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "1",
+                        "name": "call_subagent",
+                        "args": {"question": "sub", "description": "write docs"},
+                    }
+                ],
+            )
+        elif self.calls == 2:
+            return AIMessage(content="inner done")
+        return AIMessage(content="outer done")
+
+
+@pytest.mark.asyncio
+async def test_call_subagent_uses_router(monkeypatch):
+    import deep_agent
+
+    calls = []
+    orig = deep_agent.run_agent
+
+    async def recording_run_agent(*args, **kwargs):
+        calls.append((args, kwargs))
+        return await orig(*args, **kwargs)
+
+    monkeypatch.setattr(deep_agent, "run_agent", recording_run_agent)
+
+    model = RouterModel()
+    agent = deep_agent.create_deep_agent(model=model)
+    result = await agent("task")
+    assert result == "outer done"
+    assert len(calls) == 2
+    inner_args, _ = calls[1]
+    expected = deep_agent.SUBAGENTS["docs"]["instructions"]
+    assert inner_args[1] == expected
+
+
 class EchoModel:
     """Model that returns a fixed response."""
 

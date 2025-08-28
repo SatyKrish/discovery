@@ -33,7 +33,7 @@ Last updated: 2025-08-28
 - [x] UI: grid with filters (type, pinned, recent)
 - [x] Actions: open in chat, unpin, copy link
 - [x] Empty and loading states
-- [ ] E2E: navigate → filter → unpin reflects in chat
+- [x] E2E: navigate → filter → unpin reflects in chat
 
 ### 3) Virtualized thread
 - [ ] Integrate list virtualization (e.g., `@tanstack/react-virtual`)

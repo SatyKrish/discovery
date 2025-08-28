@@ -76,8 +76,11 @@ dummy_handle = DummyHandle()
 
 
 class DummyClient:
-    async def start_workflow(self, wf, question, instructions, tools, mcp_endpoints, id, task_queue):
-        dummy_handle.id = id
+    async def start_workflow(self, wf, *args, **kwargs):
+        # Support SDK style: start_workflow(wf, *, args=[...], id=..., task_queue=...)
+        if 'args' in kwargs:
+            _ = kwargs['args']  # unused, but mimics signature
+        dummy_handle.id = kwargs.get('id', dummy_handle.id)
         return dummy_handle
 
     def get_workflow_handle(self, workflow_id):

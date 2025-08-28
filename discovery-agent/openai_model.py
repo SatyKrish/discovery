@@ -1,8 +1,17 @@
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from langchain_openai import AzureChatOpenAI
 
-load_dotenv()
+# Load environment variables from both .env and .env.local if present,
+# searching from the current working directory upward.
+env_path = find_dotenv(filename=".env", usecwd=True)
+if env_path:
+        load_dotenv(env_path, override=False)
+
+env_local_path = find_dotenv(filename=".env.local", usecwd=True)
+if env_local_path:
+        # Allow .env.local to override values from .env
+        load_dotenv(env_local_path, override=True)
 
 
 def get_default_model():

@@ -12,26 +12,42 @@ export interface DiscoveryAgentDataProvider {
 
 export const HttpProvider: DiscoveryAgentDataProvider = {
   async listChats(signal) {
-    const res = await fetch("/api/chats", { signal, cache: "no-store" });
-    if (!res.ok) return [];
-    const data: unknown = await res.json().catch(() => [] as unknown);
-    const list = extractArray(data, ["chats", "data"]);
-    return list.map(normalizeChat).filter(isDefined);
+    try {
+      const res = await fetch("/api/chats", { signal, cache: "no-store" });
+      if (!res.ok) return [];
+      const data: unknown = await res.json().catch(() => [] as unknown);
+      const list = extractArray(data, ["chats", "data"]);
+      return list.map(normalizeChat).filter(isDefined);
+    } catch (e: any) {
+      // Swallow aborts; return an empty list on cancellation or network failure
+      if (e?.name === "AbortError") return [];
+      return [];
+    }
   },
   async listMessages(chatId, signal) {
-    const res = await fetch(`/api/messages?chatId=${encodeURIComponent(chatId)}`, { signal, cache: "no-store" });
-    if (!res.ok) return [];
-    const data: unknown = await res.json().catch(() => [] as unknown);
-    const list = extractArray(data, ["messages", "data"]);
-    return list.map(normalizeMessage).filter(isDefined);
+    try {
+      const res = await fetch(`/api/messages?chatId=${encodeURIComponent(chatId)}`, { signal, cache: "no-store" });
+      if (!res.ok) return [];
+      const data: unknown = await res.json().catch(() => [] as unknown);
+      const list = extractArray(data, ["messages", "data"]);
+      return list.map(normalizeMessage).filter(isDefined);
+    } catch (e: any) {
+      if (e?.name === "AbortError") return [];
+      return [];
+    }
   },
   async sendMessage(body, signal) {
-    await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal
-    });
+    try {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal
+      });
+    } catch (e: any) {
+      // Ignore aborts and network errors for demo
+      return;
+    }
   },
   async togglePin() {
     // no-op demo implementation

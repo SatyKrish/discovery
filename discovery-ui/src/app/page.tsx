@@ -1,12 +1,13 @@
 "use client";
 import React from "react";
 import { HttpProvider } from "@/lib/provider";
-import DiscoveryChat, { Chat } from "@/components/DiscoverChat";
+import DiscoveryChat, { Chat } from "@/components/DiscoveryChat";
 import { Button } from "@/components/ui/button";
 import { Mic, AudioLines, Plus } from "lucide-react";
 
 export default function HomePage() {
   const [chats, setChats] = React.useState<Chat[] | null>(null);
+  const [enteredChat, setEnteredChat] = React.useState(false);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -14,7 +15,20 @@ export default function HomePage() {
     return () => ac.abort();
   }, []);
 
-  const showHero = chats?.length === 0;
+  const showHero = (chats?.length === 0) && !enteredChat;
+
+  // After switching to chat view, ask the chat to create a new chat and focus the composer
+  React.useEffect(() => {
+    if (!showHero && enteredChat) {
+      const t = setTimeout(() => {
+        try {
+          window.dispatchEvent(new Event("discovery:new-chat"));
+          window.dispatchEvent(new Event("discovery:focus-composer"));
+        } catch {}
+      }, 150);
+      return () => clearTimeout(t);
+    }
+  }, [showHero, enteredChat]);
 
   return (
     <main className="h-dvh bg-background text-foreground bg-chat-pattern">
@@ -35,7 +49,7 @@ export default function HomePage() {
               </div>
               <div className="mt-4 text-xs text-muted-foreground">Tip: Press ⌘⏎ to send</div>
               <div className="mt-6">
-                <Button onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" })}>Start chatting</Button>
+                <Button onClick={() => setEnteredChat(true)}>Start chatting</Button>
               </div>
             </div>
           </div>

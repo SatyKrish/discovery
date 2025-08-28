@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const TooltipProvider: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ children }) => <div>{children}</div>;
+const TooltipProvider: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ children }) => <>{children}</>;
 
 type TooltipContextValue = { open: boolean; setOpen: (v: boolean) => void; controlled: boolean } | null;
 const TooltipContext = React.createContext<TooltipContextValue>(null);
@@ -22,18 +22,43 @@ const Tooltip: React.FC<TooltipProps> = ({ children, open, defaultOpen = false, 
 	);
 };
 
-const TooltipTrigger: React.FC<React.HTMLAttributes<HTMLDivElement> & { asChild?: boolean }> = ({ children, ...rest }) => {
+const TooltipTrigger: React.FC<React.HTMLAttributes<HTMLElement> & { asChild?: boolean }> = ({ children, asChild, className, ...rest }) => {
 	const ctx = React.useContext(TooltipContext);
+
+	const handleMouseEnter = () => ctx?.setOpen(true);
+	const handleMouseLeave = () => ctx?.setOpen(false);
+	const handleFocus = () => ctx?.setOpen(true);
+	const handleBlur = () => ctx?.setOpen(false);
+
+	// If asChild, clone the child element and merge our event handlers
+	if (asChild && React.isValidElement(children)) {
+		const child = children as React.ReactElement<any>;
+		const merge = (userHandler?: (e: any) => void, ourHandler?: (e: any) => void) => (e: any) => {
+			try { userHandler?.(e); } finally { ourHandler?.(e); }
+		};
+		const mergedProps = {
+			...rest,
+			className: cn(child.props.className, className),
+			onMouseEnter: merge(child.props.onMouseEnter, handleMouseEnter),
+			onMouseLeave: merge(child.props.onMouseLeave, handleMouseLeave),
+			onFocus: merge(child.props.onFocus, handleFocus),
+			onBlur: merge(child.props.onBlur, handleBlur),
+		};
+		return React.cloneElement(child, mergedProps);
+	}
+
+	// Default: wrap in a span, don't leak asChild to the DOM
 	return (
-		<div
-			onMouseEnter={() => ctx?.setOpen(true)}
-			onMouseLeave={() => ctx?.setOpen(false)}
-			onFocus={() => ctx?.setOpen(true)}
-			onBlur={() => ctx?.setOpen(false)}
+		<span
+			className={className}
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
+			onFocus={handleFocus}
+			onBlur={handleBlur}
 			{...rest}
 		>
 			{children}
-		</div>
+		</span>
 	);
 };
 

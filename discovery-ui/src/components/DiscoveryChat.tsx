@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -211,6 +211,7 @@ function TableArtifact({ artifact }: { artifact: Artifact }) {
 
   useEffect(() => {
     let cancelled = false;
+    const ac = new AbortController();
     async function load() {
       if (artifact.type !== "table.json") return;
       setLoading(true);
@@ -218,7 +219,7 @@ function TableArtifact({ artifact }: { artifact: Artifact }) {
       try {
         let input: unknown = artifact.json;
         if (!input && artifact.uri) {
-          const res = await fetch(artifact.uri, { cache: "no-store" });
+          const res = await fetch(artifact.uri, { cache: "no-store", signal: ac.signal });
           if (!res.ok) throw new Error(`Failed to fetch table: ${res.status}`);
           input = await res.json();
         }
@@ -227,14 +228,15 @@ function TableArtifact({ artifact }: { artifact: Artifact }) {
           setCols(norm.columns);
           setRows(norm.data);
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
         if (!cancelled) setError("Failed to load table data");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; ac.abort(); };
   }, [artifact]);
 
   if (loading) return <div className="h-24 rounded-md bg-muted animate-pulse" />;
@@ -340,12 +342,13 @@ function MessageBubble({ m }: { m: Message }) {
 /***********************************
  * Composer
  ***********************************/
-function Composer({ value, onChange, onSend }: { value: string; onChange: (v: string) => void; onSend: () => void }) {
+function Composer({ value, onChange, onSend, textareaRef }: { value: string; onChange: (v: string) => void; onSend: () => void; textareaRef?: React.RefObject<HTMLTextAreaElement | null> }) {
   return (
     <div className="sticky bottom-0 bg-gradient-to-t from-background via-background/95 to-background/0">
       <div className="mx-auto max-w-[920px] px-4 pb-4">
         <div className="rounded-2xl border bg-background shadow-sm">
           <Textarea
+            ref={textareaRef}
             placeholder="Message Discovery Agent…"
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -382,6 +385,7 @@ function Composer({ value, onChange, onSend }: { value: string; onChange: (v: st
 export default function DiscoveryChat({ provider = NoopProvider }: { provider?: DiscoveryAgentDataProvider }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [composer, setComposer] = useState("");
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>();
@@ -389,14 +393,53 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   const [artifactsOpen, setArtifactsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
+  // restore last selected chat id from localStorage
+  useEffect(() => {
+    try {
+      const last = localStorage.getItem("discovery:lastChatId");
+      if (last) setSelectedChatId(last);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (selectedChatId) {
+      try { localStorage.setItem("discovery:lastChatId", selectedChatId); } catch {}
+    }
+  }, [selectedChatId]);
+
+  const handleNewChat = () => {
+    const id = `local-${Date.now()}`;
+    const now = new Date().toISOString();
+    const newChat: Chat = { id, title: "New chat", lastActivity: now };
+    setChats((prev) => [newChat, ...prev]);
+    setSelectedChatId(id);
+    // focus composer shortly after
+    setTimeout(() => composerRef.current?.focus(), 0);
+  };
+
+  // listen for global events to start new chat or focus composer
+  useEffect(() => {
+    const onNew = () => handleNewChat();
+    const onFocus = () => composerRef.current?.focus();
+    window.addEventListener("discovery:new-chat", onNew as EventListener);
+    window.addEventListener("discovery:focus-composer", onFocus as EventListener);
+    return () => {
+      window.removeEventListener("discovery:new-chat", onNew as EventListener);
+      window.removeEventListener("discovery:focus-composer", onFocus as EventListener);
+    };
+  }, []);
+
   // load chats
   React.useEffect(() => {
     const ac = new AbortController();
+    let mounted = true;
     setLoadingChats(true);
-    provider.listChats(ac.signal).then((list) => {
-      setChats(list);
-    }).finally(() => setLoadingChats(false));
-    return () => ac.abort();
+    provider.listChats(ac.signal)
+      .then((list) => { if (mounted) setChats(list); })
+      .catch((e: any) => { if (e?.name !== "AbortError") { /* ignore */ } })
+      .finally(() => { if (mounted) setLoadingChats(false); });
+    return () => { mounted = false; ac.abort(); };
   }, [provider]);
 
   // choose initial chat when chats load
@@ -408,8 +451,11 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   React.useEffect(() => {
     if (!selectedChatId) return;
     const ac = new AbortController();
-    provider.listMessages(selectedChatId, ac.signal).then((list) => setMessages(list));
-    return () => ac.abort();
+    let mounted = true;
+    provider.listMessages(selectedChatId, ac.signal)
+      .then((list) => { if (mounted) setMessages(list); })
+      .catch((e: any) => { if (e?.name !== "AbortError") { /* ignore */ } });
+    return () => { mounted = false; ac.abort(); };
   }, [selectedChatId, provider]);
 
   const onSend = () => {
@@ -445,7 +491,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
             chats={chats}
             selectedId={selectedChatId}
             onSelect={setSelectedChatId}
-            onNew={() => setSelectedChatId(undefined)}
+            onNew={handleNewChat}
             collapsed={collapsed}
             setCollapsed={setCollapsed}
             isLoading={loadingChats}
@@ -487,7 +533,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           </ScrollArea>
 
           {/* Composer */}
-          <Composer value={composer} onChange={setComposer} onSend={onSend} />
+          <Composer value={composer} onChange={setComposer} onSend={onSend} textareaRef={composerRef} />
         </div>
 
         {/* RIGHT COLUMN: artifacts inline */}

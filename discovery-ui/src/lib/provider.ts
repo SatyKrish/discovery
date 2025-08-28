@@ -149,7 +149,7 @@ function normalizeMessage(x: unknown): Message | null {
   return { id: String(id), role, text: String(text), createdAt: String(createdAt), artifacts };
 }
 
-function normalizeUploadItem(x: unknown): { id: string; title: string; uri: string; mime?: string; size?: number } | null {
+export function normalizeUploadItem(x: unknown): { id: string; title: string; uri: string; mime?: string; size?: number } | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
   const id = (r["id"] ?? r["fileId"] ?? r["uuid"] ?? r["_id"]) as string | undefined;

@@ -568,7 +568,14 @@ function Composer({ value, onChange, onSend, textareaRef, onPickFiles, picked, o
                 </TooltipTrigger>
                 <TooltipContent side="top" className="pointer-events-none select-none">Attach file</TooltipContent>
               </Tooltip>
-              <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => onPickFiles(e.target.files)} />
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                className="hidden"
+                accept=".pdf,.doc,.docx,.rtf,.txt,.md,.csv,.xls,.xlsx,.json,.yaml,.yml,.xml,.zip,.ppt,.pptx,.js,.ts,.tsx,.jsx,.mjs,.cjs,.py,.java,.cs,.rb,.go,.rs,.c,.cpp,.h,.hpp,.sh,.bash,.zsh,.ps1,.toml,.ini,.cfg,.conf,.sql"
+                onChange={(e) => onPickFiles(e.target.files)}
+              />
               <Checkbox id="pin-next" />
               <label htmlFor="pin-next" className="text-xs text-muted-foreground">Pin next artifact</label>
             </div>
@@ -709,7 +716,13 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   const handlePickFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
-    const next = arr.map((f) => ({ id: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2)}`, file: f }));
+    // Block audio/video types for enterprise context
+    const blocked = arr.filter((f) => (f.type?.startsWith("audio/") || f.type?.startsWith("video/")));
+    const allowed = arr.filter((f) => !(f.type?.startsWith("audio/") || f.type?.startsWith("video/")));
+    if (blocked.length) {
+      setUploadError("Some files were blocked (audio/video not allowed).");
+    }
+    const next = allowed.map((f) => ({ id: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2)}`, file: f }));
     setPicked((prev) => [...prev, ...next]);
   };
 

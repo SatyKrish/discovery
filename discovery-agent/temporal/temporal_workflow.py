@@ -15,16 +15,23 @@ from __future__ import annotations
 
 from datetime import timedelta
 from importlib import import_module
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Sequence, Tuple
 
-from langchain_core.tools import BaseTool
 from temporalio import activity, workflow
 
-from deep_agent import create_deep_agent
+if TYPE_CHECKING:  # pragma: no cover - hints only
+    from langchain_core.tools import BaseTool
 
 
-def _load_tool(spec: str) -> BaseTool:
+def create_deep_agent(*args, **kwargs):  # pragma: no cover - runtime import
+    from deep_agent import create_deep_agent as _create
+    return _create(*args, **kwargs)
+
+
+def _load_tool(spec: str) -> "BaseTool":
     """Resolve a ``module:attr`` spec to a ``BaseTool`` instance."""
+
+    from langchain_core.tools import BaseTool  # Imported lazily for sandboxing
 
     module_name, attr_name = spec.split(":", 1)
     module = import_module(module_name)
@@ -56,6 +63,7 @@ async def run_query(
         return False, data
 
     tool_objs = [_load_tool(t) for t in tools] if tools else None
+
     agent = create_deep_agent(
         tools=tool_objs,
         mcp_endpoints=mcp_endpoints,

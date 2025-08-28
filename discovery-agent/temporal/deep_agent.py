@@ -12,6 +12,18 @@ and optional metadata.  The ``router`` tool selects a subagent based on a
 natural-language description.  ``call_subagent`` accepts either an explicit
 subagent name or a description and dispatches to :func:`run_agent` with the
 corresponding instructions.
+
+Tools from external MCP servers or direct :class:`~langchain_core.tools.BaseTool`
+instances can augment the agent.  Any provided tools are merged with the
+built-ins before the model is bound::
+
+    from langchain_community.tools import RequestsGetTool
+
+    await run_agent(
+        "2 + 2?",
+        tools=[RequestsGetTool()],
+        mcp_endpoints=["http://localhost:8000/mcp"],
+    )
 """
 
 from __future__ import annotations
@@ -25,6 +37,8 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.tools import BaseTool, tool
+from mcp.client.session import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 
 from openai_model import get_default_model
 
@@ -77,6 +91,7 @@ async def run_agent(
     question: str,
     instructions: str = "",
     tools: Sequence[BaseTool] | None = None,
+    mcp_endpoints: Sequence[str] | None = None,
     *,
     allow_tools: Iterable[str] | None = None,
     on_tool_call: Callable[[str, Dict[str, Any]], tuple[bool, Dict[str, Any]]] | None = None,
@@ -85,14 +100,39 @@ async def run_agent(
 ) -> str:
     """Execute the DeepAgent loop and return the final response text.
 
-    Tool execution can be restricted via ``allow_tools`` and inspected or
-    modified with the ``on_tool_call`` callback.
+    Additional tools from ``tools`` and ``mcp_endpoints`` are merged with the
+    agent's built-ins before the model is bound.  Tool execution can be
+    restricted via ``allow_tools`` and inspected or modified with the
+    ``on_tool_call`` callback.
     """
 
     state = _state or {"files": {}, "todos": []}
     files: Dict[str, str] = state["files"]
     todos: List[str] = state["todos"]
-    extra_tools = list(tools or [])
+    extra_tools: List[BaseTool] = list(tools or [])
+    if mcp_endpoints:
+        for endpoint in mcp_endpoints:
+            async with streamablehttp_client(endpoint) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    listing = await session.list_tools()
+            for remote in listing.tools:
+                @tool(name=remote.name, description=remote.description or "")
+                async def _mcp_tool(
+                    _endpoint: str = endpoint,
+                    _name: str = remote.name,
+                    **kwargs: Any,
+                ) -> str:
+                    async with streamablehttp_client(_endpoint) as (r, w, _):
+                        async with ClientSession(r, w) as session:
+                            await session.initialize()
+                            result = await session.call_tool(_name, kwargs)
+                    parts = [
+                        item.text for item in result.content if hasattr(item, "text")
+                    ]
+                    return "\n".join(parts)
+
+                extra_tools.append(_mcp_tool)
     allowed_tool_set = set(allow_tools) if allow_tools is not None else None
 
     @tool
@@ -134,7 +174,8 @@ async def run_agent(
         return await run_agent(
             question,
             instr,
-            extra_tools,
+            tools=tools,
+            mcp_endpoints=mcp_endpoints,
             allow_tools=allow_tools,
             on_tool_call=on_tool_call,
             _state=state,

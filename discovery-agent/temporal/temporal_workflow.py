@@ -1,31 +1,21 @@
-"""Temporal workflow that runs the custom DeepAgent implementation.
+"""Temporal workflow managing an interactive DeepAgent session.
 
-The workflow delegates execution to an activity that constructs a DeepAgent
-via :func:`~deep_agent.create_deep_agent` and runs it using OpenAI's tool
-calling.  This provides the same capabilities as the original LangGraph
-version while leveraging Temporal's reliability semantics.
+This module rewrites the previous minimal workflow to support a prompt queue,
+conversation history, and a remaining-turn limit.  External callers can send
+new prompts or confirm tool executions via workflow signals.  The workflow is
+able to expose its current conversation transcript and the most recent tool
+interaction through queries.
 
-Connections to external [MCP](https://github.com/modelcontextprotocol)
-servers or additional LangChain tools can be supplied when starting the
-workflow.  ``tools`` should be import strings of callables that return
-``BaseTool`` instances.  The activity loads these tools and merges them with
-the agent's built-ins::
-
-    await client.execute_workflow(
-        DeepAgentWorkflow.run,
-        "Say hello",
-        tools=["my_tools.greetings:hello_tool"],
-        mcp_endpoints=["http://localhost:8000/mcp"],
-        id="demo-run",
-        task_queue="deep-agent-task-queue",
-    )
+After a configurable number of turns the workflow will issue
+``continue_as_new`` with the current state so that long chats can proceed
+without growing execution history unbounded.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
 from importlib import import_module
-from typing import Sequence
+from typing import Any, Dict, List, Sequence, Tuple
 
 from langchain_core.tools import BaseTool
 from temporalio import activity, workflow
@@ -34,6 +24,8 @@ from deep_agent import create_deep_agent
 
 
 def _load_tool(spec: str) -> BaseTool:
+    """Resolve a ``module:attr`` spec to a ``BaseTool`` instance."""
+
     module_name, attr_name = spec.split(":", 1)
     module = import_module(module_name)
     obj = getattr(module, attr_name)
@@ -52,30 +44,143 @@ async def run_query(
     instructions: str = "",
     tools: Sequence[str] | None = None,
     mcp_endpoints: Sequence[str] | None = None,
-) -> str:
-    """Execute the DeepAgent for the supplied question."""
+) -> Tuple[str, Dict[str, Any] | None]:
+    """Execute the DeepAgent and return its response and any tool request."""
+
+    latest_tool: Dict[str, Any] | None = None
+
+    async def _on_tool_call(name: str, data: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+        nonlocal latest_tool
+        latest_tool = {"name": name, "args": data}
+        # Disallow execution; the workflow will confirm separately.
+        return False, data
+
     tool_objs = [_load_tool(t) for t in tools] if tools else None
-    agent = create_deep_agent(tools=tool_objs, mcp_endpoints=mcp_endpoints)
-    return await agent(question, instructions)
+    agent = create_deep_agent(
+        tools=tool_objs,
+        mcp_endpoints=mcp_endpoints,
+        on_tool_call=_on_tool_call,
+    )
+    response = await agent(question, instructions)
+    return response, latest_tool
 
 
 @workflow.defn
 class DeepAgentWorkflow:
-    """Workflow that runs the DeepAgent loop as an activity."""
+    """Workflow that orchestrates an interactive DeepAgent session."""
 
+    def __init__(self) -> None:  # pragma: no cover - exercised in tests
+        self.prompt_queue: List[str] = []
+        self.conversation_history: List[Dict[str, str]] = []
+        self.latest_tool_data: Dict[str, Any] | None = None
+        self._awaiting_confirmation = False
+        self._chat_ended = False
+
+    # ------------------------------------------------------------------
+    # Signals
+    # ------------------------------------------------------------------
+    @workflow.signal
+    def user_prompt(self, prompt: str) -> None:
+        """Add a new user prompt to the queue."""
+
+        self.prompt_queue.append(prompt)
+
+    @workflow.signal
+    def confirm(self, data: Dict[str, Any] | None = None) -> None:
+        """Confirm the last tool call and optionally supply result data."""
+
+        self.latest_tool_data = data
+        self._awaiting_confirmation = False
+
+    @workflow.signal
+    def end_chat(self) -> None:
+        """Terminate the chat loop."""
+
+        self._chat_ended = True
+
+    # ------------------------------------------------------------------
+    # Queries
+    # ------------------------------------------------------------------
+    @workflow.query
+    def get_conversation_history(self) -> List[Dict[str, str]]:
+        """Return the accumulated conversation messages."""
+
+        return list(self.conversation_history)
+
+    @workflow.query
+    def get_latest_tool_data(self) -> Dict[str, Any] | None:
+        """Return data associated with the most recent tool call."""
+
+        return self.latest_tool_data
+
+    # ------------------------------------------------------------------
+    # Workflow run
+    # ------------------------------------------------------------------
     @workflow.run
     async def run(
         self,
-        question: str,
+        question: str | None = None,
         instructions: str = "",
         tools: Sequence[str] | None = None,
         mcp_endpoints: Sequence[str] | None = None,
-    ) -> str:  # pragma: no cover - workflow entrypoint
-        return await workflow.execute_activity(
-            run_query,
-            question,
-            instructions,
-            tools,
-            mcp_endpoints,
-            schedule_to_close_timeout=timedelta(minutes=1),
-        )
+        *,
+        conversation_history: List[Dict[str, str]] | None = None,
+        remaining_turns: int = 20,
+        continue_after: int = 50,
+        prompt_queue: List[str] | None = None,
+    ) -> List[Dict[str, str]]:  # pragma: no cover - workflow entrypoint
+        """Run the chat loop until exhausted or ``end_chat`` is signalled."""
+
+        self.prompt_queue = list(prompt_queue or [])
+        if question:
+            self.prompt_queue.append(question)
+        self.conversation_history = conversation_history or []
+        self.latest_tool_data = None
+        self._awaiting_confirmation = False
+        self._chat_ended = False
+
+        turns = 0
+        while remaining_turns > 0 and not self._chat_ended:
+            # Wait for a prompt to be queued or chat to be ended
+            await workflow.wait_condition(
+                lambda: bool(self.prompt_queue) or self._chat_ended
+            )
+            if self._chat_ended or not self.prompt_queue:
+                break
+
+            prompt = self.prompt_queue.pop(0)
+            self.conversation_history.append({"user": prompt})
+
+            response, tool_data = await workflow.execute_activity(
+                run_query,
+                prompt,
+                instructions,
+                tools,
+                mcp_endpoints,
+                schedule_to_close_timeout=timedelta(minutes=1),
+            )
+
+            self.conversation_history.append({"assistant": response})
+            self.latest_tool_data = tool_data
+
+            if tool_data is not None:
+                self._awaiting_confirmation = True
+                await workflow.wait_condition(lambda: not self._awaiting_confirmation)
+
+            remaining_turns -= 1
+            turns += 1
+
+            if turns >= continue_after:
+                return workflow.continue_as_new(
+                    None,
+                    instructions,
+                    tools,
+                    mcp_endpoints,
+                    conversation_history=self.conversation_history,
+                    remaining_turns=remaining_turns,
+                    continue_after=continue_after,
+                    prompt_queue=list(self.prompt_queue),
+                )
+
+        return self.conversation_history
+

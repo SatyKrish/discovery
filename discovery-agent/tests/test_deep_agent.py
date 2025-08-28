@@ -66,7 +66,9 @@ sys.modules["mcp.client.session"] = session_module
 sys.modules["mcp.client.streamable_http"] = stream_module
 sys.modules["openai_model"] = openai_stub
 temporal_stub.activity = types.SimpleNamespace(defn=lambda f: f)
-temporal_stub.workflow = types.SimpleNamespace(defn=lambda f: f, run=lambda f: f)
+temporal_stub.workflow = types.SimpleNamespace(
+    defn=lambda f: f, run=lambda f: f, signal=lambda f: f, query=lambda f: f
+)
 sys.modules["temporalio"] = temporal_stub
 
 sys.path.append(str(Path(__file__).resolve().parent.parent / "temporal"))
@@ -124,7 +126,7 @@ async def test_run_query_forwards_tools_and_endpoints(monkeypatch):
     result = await temporal_workflow.run_query(
         "Q", "I", tools=["pkg:tool"], mcp_endpoints=["http://server"]
     )
-    assert result == "ok"
+    assert result == ("ok", None)
     assert called["agent_args"] == ("Q", "I")
     assert called["factory_kwargs"]["tools"] == [dummy_tool]
     assert called["factory_kwargs"]["mcp_endpoints"] == ["http://server"]

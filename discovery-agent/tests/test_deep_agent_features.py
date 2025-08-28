@@ -63,7 +63,7 @@ openai_stub.get_default_model = _stub_get_default_model
 sys.modules["openai_model"] = openai_stub
 
 # Make deep_agent importable
-sys.path.append(str(Path(__file__).resolve().parents[1] / "discovery-agent/temporal"))
+sys.path.append(str(Path(__file__).resolve().parents[1] / "temporal"))
 import deep_agent
 from deep_agent import run_agent, SUBAGENTS
 

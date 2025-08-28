@@ -30,8 +30,13 @@ from typing import Any, Dict, List, Tuple, Optional
 import duckdb
 import pandas as pd
 from langchain_core.tools import tool
-from deepagents import create_deep_agent 
-from azure_openai_model import azure_openai_model
+from deepagents import create_deep_agent
+import deepagents.model as deep_model
+from openai_model import get_default_model as openai_get_default_model
+
+
+# Override DeepAgents default model to use OpenAI
+deep_model.get_default_model = openai_get_default_model
 
 # -------------------------------
 # Synthetic data generation
@@ -429,6 +434,5 @@ Examples:
 agent = create_deep_agent(
     tools=[list_assets, sql, profile, dq_check],
     instructions=INSTRUCTIONS,
-    model=azure_openai_model,
     # You can add subagents later if desired; keeping MVP simple.
 )

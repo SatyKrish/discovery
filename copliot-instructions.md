@@ -10,7 +10,6 @@ Please follow these guidelines when contributing.
 
 ### Required Before Each Commit
 - UI: run lint and ensure the app builds cleanly
-  - pnpm: `pnpm lint` and `pnpm build`
   - npm: `npm run lint` and `npm run build`
 - Python agent: if you changed code under `discovery-agent/`
   - Ensure dependencies are installed: `pip install -r discovery-agent/requirements.txt`
@@ -20,16 +19,16 @@ Please follow these guidelines when contributing.
 
 ### Development Flow
 - UI (Next.js):
-  - Dev server: `pnpm dev` (or `npm run dev`) in `discovery-ui/`
-  - Build: `pnpm build` (or `npm run build`) in `discovery-ui/`
-  - Start (prod): `pnpm start` (or `npm start`) in `discovery-ui/`
+  - Dev server: `npm run dev` in `discovery-ui/`
+  - Build: `npm run build` in `discovery-ui/`
+  - Start (prod): `npm start` in `discovery-ui/`
 - Agent (Python):
   - Create venv: `python -m venv .venv && source .venv/bin/activate`
   - Install deps: `pip install -r discovery-agent/requirements.txt`
   - Run your entry script as needed (e.g., `python discovery-agent/data_agent.py`) if applicable
 
 ### CI (local full check)
-- UI full pass: `pnpm build && pnpm lint` (or the npm equivalents)
+- UI full pass: `npm run build && npm run lint`
 - Agent quick check: format (optional) + `python -m py_compile discovery-agent/*.py`
 
 ## Repository Structure
@@ -39,7 +38,7 @@ Please follow these guidelines when contributing.
   - `src/components/`: Reusable UI components
   - `src/lib/`: Utilities and the UI-side provider contract (`provider.ts`)
   - `package.json`: scripts (`dev`, `build`, `start`, `lint`)
-  - `pnpm-lock.yaml`: prefer pnpm for installs; npm is acceptable if consistent
+  - `package-lock.json`: npm lockfile; use npm for installs
 - `discovery-agent/`
   - `azure_openai_model.py`, `data_agent.py`: core agent modules
   - `langgraph.json`: graph/config for agent behaviors
@@ -72,17 +71,17 @@ Please follow these guidelines when contributing.
 
 ## Common Commands
 - UI (in `discovery-ui/`):
-  - Install deps: `pnpm install` (or `npm install`)
-  - Dev: `pnpm dev`
-  - Lint: `pnpm lint`
-  - Build: `pnpm build`
-  - Start: `pnpm start`
+  - Install deps: `npm install`
+  - Dev: `npm run dev`
+  - Lint: `npm run lint`
+  - Build: `npm run build`
+  - Start: `npm start`
 - Agent:
   - Create venv: `python -m venv .venv && source .venv/bin/activate`
   - Install deps: `pip install -r discovery-agent/requirements.txt`
   - Optional format: `python -m black discovery-agent`
 
 ## Notes
-- Use pnpm if possible (project has a pnpm lockfile). If using npm, stay consistent within your workflow.
+- Use npm as the package manager. If switching from pnpm, remove any `pnpm-lock.yaml` and run `npm install` to generate `package-lock.json`.
 - Tailwind CSS v4 is used in the UI; tokens like `bg-background` map to CSS variables defined in `globals.css`.
 - Avoid introducing new build tools without discussion. Prefer minimal, pinned, widely-used libraries.

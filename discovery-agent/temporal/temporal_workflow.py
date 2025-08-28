@@ -25,7 +25,11 @@ if TYPE_CHECKING:  # pragma: no cover - hints only
 
 
 def create_deep_agent(*args, **kwargs):  # pragma: no cover - runtime import
-    from deep_agent import create_deep_agent as _create
+    # Support both package and direct module imports
+    try:
+        from .deep_agent import create_deep_agent as _create
+    except Exception:  # pragma: no cover - fallback for test import style
+        from deep_agent import create_deep_agent as _create
     return _create(*args, **kwargs)
 
 
@@ -93,6 +97,12 @@ async def run_query(
     except Exception:
         _alog.exception("activity.run_query.error")
         raise
+    agent = create_deep_agent(
+        tools=tool_objs,
+        mcp_endpoints=mcp_endpoints,
+    )
+    response = await agent(question, instructions, on_tool_call=_on_tool_call)
+    return response, latest_tool
 
 
 @workflow.defn
@@ -203,12 +213,11 @@ class DeepAgentWorkflow:
                 extra={"turn": turns + 1, "queue_len": len(self.prompt_queue)},
             )
 
+            # Pass arguments via keyword to satisfy Temporal SDK's signature
+            # execute_activity(activity, *, args=[...], ...)
             response, tool_data = await workflow.execute_activity(
                 run_query,
-                prompt,
-                instructions,
-                tools,
-                mcp_endpoints,
+                args=[prompt, instructions, tools, mcp_endpoints],
                 schedule_to_close_timeout=timedelta(minutes=1),
             )
 

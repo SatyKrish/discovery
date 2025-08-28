@@ -13,6 +13,7 @@ avoid stalling the worker's event loop.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 import logging
@@ -25,11 +26,19 @@ from temporalio.common import RawValue
 from temporalio.converter import DataConverter
 from temporalio.worker import Worker
 
-from agent_activities import AgentActivities
-from tool_registry import TOOL_REGISTRY
-from temporal_workflow import DeepAgentWorkflow, run_query
+# Support both package and direct module imports (for tests)
+try:
+    from .agent_activities import AgentActivities
+    from .tool_registry import TOOL_REGISTRY
+    from .temporal_workflow import DeepAgentWorkflow, run_query
+except Exception:  # pragma: no cover - fallback for test import style
+    from agent_activities import AgentActivities
+    from tool_registry import TOOL_REGISTRY
+    from temporal_workflow import DeepAgentWorkflow, run_query
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 # Dynamic dispatcher ---------------------------------------------------------
@@ -95,10 +104,15 @@ async def main() -> None:
     temporal_address = os.getenv("TEMPORAL_ADDRESS", "localhost:7233")
     task_queue = os.getenv("TEMPORAL_TASK_QUEUE", "deep-agent-task-queue")
 
-    # Access LLM settings so they are loaded from the environment.  The
-    # ``openai_model`` module reads these values when imported by activities.
-    os.getenv("OPENAI_API_KEY", "")
-    os.getenv("OPENAI_MODEL", "")
+    # Access LLM settings so they are loaded from the environment.
+    os.getenv("AZURE_OPENAI_ENDPOINT", "")
+    os.getenv("AZURE_OPENAI_DEPLOYMENT", "")
+    os.getenv("AZURE_OPENAI_API_KEY", "")
+
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+    logger.info(
+        "Starting Temporal worker: address=%s, task_queue=%s", temporal_address, task_queue
+    )
     logging.getLogger(__name__).info(
         "worker.starting",
         extra={
@@ -144,4 +158,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution only
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nWorker stopped by user.")

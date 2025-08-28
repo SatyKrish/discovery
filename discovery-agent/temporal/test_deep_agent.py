@@ -69,7 +69,7 @@ temporal_stub.workflow = types.SimpleNamespace(defn=lambda f: f, run=lambda f: f
 sys.modules["temporalio"] = temporal_stub
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from deep_agent import create_deep_agent
+from deep_agent import create_deep_agent, run_agent
 import temporal_workflow
 
 
@@ -172,4 +172,28 @@ async def test_call_subagent_forwards_factory_config(monkeypatch):
     assert inner_kwargs.get("base_prompt") == "PROMPT"
     assert inner_kwargs.get("model") is model
     assert inner_kwargs.get("subagents") == sub_cfg
+
+
+class EchoModel:
+    """Model that returns a fixed response."""
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        return AIMessage(content="done")
+
+
+@pytest.mark.asyncio
+async def test_run_agent_tracks_state():
+    state = {}
+    result = await run_agent("hi", model=EchoModel(), _state=state, _steps=3)
+    assert result == "done"
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+
+    assert isinstance(state["messages"][0], SystemMessage)
+    assert isinstance(state["messages"][1], HumanMessage)
+    assert isinstance(state["messages"][2], AIMessage)
+    assert state["remaining_steps"] == 2
+    assert state["response"] == {"content": "done"}
 

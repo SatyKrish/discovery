@@ -31,7 +31,7 @@ defaults.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Iterable, List, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Sequence, TypedDict
 
 from langchain_core.messages import (
     AIMessage,
@@ -44,6 +44,21 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 from openai_model import get_default_model
+
+
+class AgentState(TypedDict, total=False):
+    """State container shared across agent invocations.
+
+    Mirrors LangGraph's ``AgentState`` by persisting the conversation ``messages``,
+    the remaining step budget, the evolving in-memory ``files``/``todos`` and the
+    final ``response``.
+    """
+
+    files: Dict[str, str]
+    todos: List[str]
+    messages: List[Any]
+    remaining_steps: int
+    response: Dict[str, Any] | None
 
 # -------------------------------
 # Subagent registry
@@ -112,9 +127,25 @@ async def run_agent(
     ``on_tool_call`` callback.
     """
 
-    state = _state or {"files": {}, "todos": []}
+    state: AgentState = (
+        _state
+        if _state is not None
+        else {
+            "files": {},
+            "todos": [],
+            "messages": [],
+            "remaining_steps": _steps,
+            "response": None,
+        }
+    )
+    state.setdefault("files", {})
+    state.setdefault("todos", [])
+    state.setdefault("messages", [])
+    state.setdefault("remaining_steps", _steps)
+    state.setdefault("response", None)
     files: Dict[str, str] = state["files"]
     todos: List[str] = state["todos"]
+    messages: List[Any] = state["messages"]
     extra_tools: List[BaseTool] = list(tools or [])
     if mcp_endpoints:
         for endpoint in mcp_endpoints:
@@ -190,7 +221,7 @@ async def run_agent(
             allow_tools=allow_tools,
             on_tool_call=on_tool_call,
             _state=state,
-            _steps=_steps,
+            _steps=state.get("remaining_steps", _steps),
             base_prompt=base_prompt,
             model=model,
             subagents=subagents,
@@ -211,12 +242,16 @@ async def run_agent(
     bound_model = (model or get_default_model()).bind_tools(all_tools)
 
     system = base_prompt + ("\n\n" + instructions if instructions else "")
-    messages: List[Any] = [SystemMessage(content=system), HumanMessage(content=question)]
+    if not messages:
+        messages.append(SystemMessage(content=system))
+    messages.append(HumanMessage(content=question))
 
-    for _ in range(_steps):
+    while state["remaining_steps"] > 0:
+        state["remaining_steps"] -= 1
         ai: AIMessage = await bound_model.ainvoke(messages)
         messages.append(ai)
         if not ai.tool_calls:
+            state["response"] = {"content": ai.content or ""}
             return ai.content or ""
         for call in ai.tool_calls:
             name = call["name"]

@@ -1,7 +1,7 @@
 import sys
 import types
 import pytest
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from pathlib import Path
 
 
@@ -292,4 +292,76 @@ async def test_subagent_instructions_preserved():
     outer_call_msgs = model.calls[2]
     assert isinstance(outer_call_msgs[-2], SystemMessage)
     assert "parent" in outer_call_msgs[-2].content
+
+
+class BlockToolModel:
+    """Model that attempts to invoke a disallowed tool."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def bind_tools(self, tools):
+        self.tools = tools
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[{"id": "1", "name": "ls", "args": {}}],
+            )
+        return AIMessage(content="done")
+
+
+@pytest.mark.asyncio
+async def test_allow_tools_blocks_unlisted_tool():
+    state = {}
+    result = await run_agent(
+        "task", model=BlockToolModel(), allow_tools=["read_file"], _state=state, _steps=3
+    )
+    assert result == "done"
+    tool_msgs = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    assert any("blocked" in m.content for m in tool_msgs)
+
+
+class ModifyArgsModel:
+    """Model that writes a file whose content is tweaked by a callback."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "1",
+                        "name": "write_file",
+                        "args": {"path": "a.txt", "content": "orig"},
+                    }
+                ],
+            )
+        return AIMessage(content="done")
+
+
+@pytest.mark.asyncio
+async def test_on_tool_call_can_modify_args():
+    state = {}
+
+    def approve(name, args):
+        assert name == "write_file"
+        args["content"] = "changed"
+        return True, args
+
+    result = await run_agent(
+        "task", model=ModifyArgsModel(), on_tool_call=approve, _state=state, _steps=3
+    )
+    assert result == "done"
+    assert state["files"]["a.txt"] == "changed"
 

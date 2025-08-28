@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try { localStorage.removeItem('discovery:lastChatId'); } catch {}
+  });
+});
+
 test.describe('Virtualized thread performance smoke', () => {
   test('renders bounded nodes while scrolling and on new message', async ({ page }) => {
     // Seed a large chat with many messages

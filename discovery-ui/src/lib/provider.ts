@@ -6,10 +6,11 @@ export type Chat = { id: string; title: string; lastActivity?: string };
 export interface DiscoveryAgentDataProvider {
   listChats(signal?: AbortSignal): Promise<Chat[]>;
   listMessages(chatId: string, signal?: AbortSignal): Promise<Message[]>;
-  sendMessage(params: { chatId: string; text: string }, signal?: AbortSignal): Promise<void>;
+  sendMessage(params: { chatId: string; text: string; attachments?: { id: string; title: string; uri: string; mime?: string; size?: number }[] }, signal?: AbortSignal): Promise<void>;
   togglePin?(params: { chatId: string; artifactId: string }, signal?: AbortSignal): Promise<void>;
   createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
   deleteChat?(chatId: string, signal?: AbortSignal): Promise<void>;
+  uploadFiles?(files: File[], signal?: AbortSignal): Promise<Array<{ id: string; title: string; uri: string; mime?: string; size?: number }>>;
 }
 
 export const HttpProvider: DiscoveryAgentDataProvider = {
@@ -20,9 +21,10 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
       const data: unknown = await res.json().catch(() => [] as unknown);
       const list = extractArray(data, ["chats", "data"]);
       return list.map(normalizeChat).filter(isDefined);
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Swallow aborts; return an empty list on cancellation or network failure
-      if (e?.name === "AbortError") return [];
+      const name = (e as { name?: string } | null)?.name;
+      if (name === "AbortError") return [];
       return [];
     }
   },
@@ -33,8 +35,9 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
       const data: unknown = await res.json().catch(() => [] as unknown);
       const list = extractArray(data, ["messages", "data"]);
       return list.map(normalizeMessage).filter(isDefined);
-    } catch (e: any) {
-      if (e?.name === "AbortError") return [];
+    } catch (e: unknown) {
+      const name = (e as { name?: string } | null)?.name;
+      if (name === "AbortError") return [];
       return [];
     }
   },
@@ -46,9 +49,31 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
         body: JSON.stringify(body),
         signal
       });
-    } catch (e: any) {
+  } catch {
       // Ignore aborts and network errors for demo
       return;
+    }
+  },
+  async uploadFiles(files, signal) {
+    const fd = new FormData();
+    files.forEach((f) => fd.append("files", f));
+    try {
+      const res = await fetch("/api/uploads", { method: "POST", body: fd, signal });
+      if (!res.ok) return [];
+      const data: unknown = await res.json().catch(() => ({} as unknown));
+      // Normalize response to array of { id, title, uri, mime, size }
+      const rec = data as Record<string, unknown>;
+      const filesArr = Array.isArray(data)
+        ? (data as unknown[])
+        : (Array.isArray(rec["files"]) ? (rec["files"] as unknown[]) : (Array.isArray(rec["data"]) ? (rec["data"] as unknown[]) : []));
+      const norm = filesArr
+        .map(normalizeUploadItem)
+        .filter((x): x is { id: string; title: string; uri: string; mime?: string; size?: number } => Boolean(x));
+      return norm;
+    } catch (e: unknown) {
+      const name = (e as { name?: string } | null)?.name;
+      if (name === "AbortError") return [];
+      return [];
     }
   },
   async togglePin() {
@@ -63,12 +88,13 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
         signal
       });
       if (!res.ok) return null;
-      const data: unknown = await res.json().catch(() => ({} as unknown));
+    const data: unknown = await res.json().catch(() => ({} as unknown));
       // Try to normalize from either the response root or nested under `chat`
-      const candidate = (data as any)?.chat ?? data;
+    const candidate = (data as Record<string, unknown>)["chat"] ?? data;
       return normalizeChat(candidate);
-    } catch (e: any) {
-      if (e?.name === "AbortError") return null;
+    } catch (e: unknown) {
+      const name = (e as { name?: string } | null)?.name;
+      if (name === "AbortError") return null;
       return null;
     }
   }
@@ -76,7 +102,7 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
   async deleteChat(chatId, signal) {
     try {
       await fetch(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE", signal });
-    } catch (e: any) {
+  } catch {
       // ignore abort/network errors for demo
       return;
     }
@@ -121,4 +147,16 @@ function normalizeMessage(x: unknown): Message | null {
   const artifacts = Array.isArray((x as Dict)["artifacts"]) ? ((x as Dict)["artifacts"] as Artifact[]) : undefined;
   if (!text) return null;
   return { id: String(id), role, text: String(text), createdAt: String(createdAt), artifacts };
+}
+
+function normalizeUploadItem(x: unknown): { id: string; title: string; uri: string; mime?: string; size?: number } | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  const id = (r["id"] ?? r["fileId"] ?? r["uuid"] ?? r["_id"]) as string | undefined;
+  const title = (r["title"] ?? r["name"] ?? r["filename"]) as string | undefined;
+  const uri = (r["uri"] ?? r["url"] ?? r["path"]) as string | undefined;
+  const mime = (r["mime"] ?? r["mimetype"] ?? r["contentType"]) as string | undefined;
+  const size = typeof r["size"] === "number" ? (r["size"] as number) : undefined;
+  if (!uri) return null;
+  return { id: String(id ?? Math.random().toString(36).slice(2)), title: String(title ?? "file"), uri: String(uri), mime, size };
 }

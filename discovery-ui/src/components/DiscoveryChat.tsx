@@ -43,10 +43,11 @@ export type Chat = { id: string; title: string; lastActivity?: string };
 export interface DiscoveryAgentDataProvider {
   listChats(signal?: AbortSignal): Promise<Chat[]>;
   listMessages(chatId: string, signal?: AbortSignal): Promise<Message[]>;
-  sendMessage(params: { chatId: string; text: string }, signal?: AbortSignal): Promise<void>;
+  sendMessage(params: { chatId: string; text: string; attachments?: { id: string; title: string; uri: string; mime?: string; size?: number }[] }, signal?: AbortSignal): Promise<void>;
   togglePin?(params: { chatId: string; artifactId: string }, signal?: AbortSignal): Promise<void>;
   createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
   deleteChat?(chatId: string, signal?: AbortSignal): Promise<void>;
+  uploadFiles?(files: File[], signal?: AbortSignal): Promise<Array<{ id: string; title: string; uri: string; mime?: string; size?: number }>>;
 }
 
 export const NoopProvider: DiscoveryAgentDataProvider = {
@@ -260,8 +261,16 @@ function ArtifactPreview({ artifact, onTogglePin }: { artifact: Artifact; onTogg
         ) : artifact.type === "chart.recharts" || artifact.type === "chart.vegaLite" ? (
           <ChartArtifact artifact={artifact} />
         ) : (
-          <div className="h-24 flex items-center justify-center bg-muted/30 rounded-md text-sm text-foreground">
-            <FileDown className="h-4 w-4 mr-2" /> {artifact.title}
+          <div className="flex items-center justify-between gap-3 bg-muted/30 rounded-md text-sm text-foreground p-3">
+            <div className="truncate">
+              <div className="font-medium truncate">{artifact.title}</div>
+              {artifact.uri && <div className="text-xs text-muted-foreground truncate">{artifact.uri}</div>}
+            </div>
+            {artifact.uri ? (
+              <a href={artifact.uri} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                <FileDown className="h-4 w-4 mr-1" /> Download
+              </a>
+            ) : null}
           </div>
         )}
       </CardContent>
@@ -300,8 +309,9 @@ function TableArtifact({ artifact }: { artifact: Artifact }) {
           setCols(norm.columns);
           setRows(norm.data);
         }
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
+      } catch (e: unknown) {
+        const name = (e as { name?: string } | null)?.name;
+        if (name === "AbortError") return;
         if (!cancelled) setError("Failed to load table data");
       } finally {
         if (!cancelled) setLoading(false);
@@ -384,7 +394,7 @@ function formatCell(v: unknown) {
  ***********************************/
 type ChartSpec = {
   kind?: "line" | "bar" | "area";
-  data?: Array<Record<string, any>>;
+  data?: Array<Record<string, unknown>>;
   xKey?: string;
   yKey?: string;
   color?: string;
@@ -394,7 +404,7 @@ function normalizeChart(input: unknown): ChartSpec {
   if (!input || typeof input !== "object") return {};
   const o = input as Record<string, unknown>;
   const kind = (typeof o.kind === "string" ? o.kind : "line") as ChartSpec["kind"];
-  const data = Array.isArray(o.data) ? (o.data as Array<Record<string, any>>) : [];
+  const data = Array.isArray(o.data) ? (o.data as Array<Record<string, unknown>>) : [];
   const xKey = typeof o.xKey === "string" ? (o.xKey as string) : (data[0] ? Object.keys(data[0])[0] : undefined);
   const yKey = typeof o.yKey === "string" ? (o.yKey as string) : (data[0] ? Object.keys(data[0])[1] : undefined);
   const color = typeof o.color === "string" ? (o.color as string) : "hsl(var(--primary))";
@@ -421,8 +431,9 @@ function ChartArtifact({ artifact }: { artifact: Artifact }) {
         }
         const s = normalizeChart(input);
         if (!cancelled) setSpec(s);
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
+      } catch (e: unknown) {
+        const name = (e as { name?: string } | null)?.name;
+        if (name === "AbortError") return;
         if (!cancelled) setError("Failed to load chart data");
       } finally {
         if (!cancelled) setLoading(false);
@@ -504,7 +515,19 @@ function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifact
 /***********************************
  * Composer
  ***********************************/
-function Composer({ value, onChange, onSend, textareaRef }: { value: string; onChange: (v: string) => void; onSend: () => void; textareaRef?: React.RefObject<HTMLTextAreaElement | null> }) {
+function Composer({ value, onChange, onSend, textareaRef, onPickFiles, picked, onRemovePicked, uploading, onRetryUpload, uploadError }: {
+  value: string;
+  onChange: (v: string) => void;
+  onSend: () => void;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  onPickFiles: (files: FileList | null) => void;
+  picked: Array<{ id: string; name: string; size: number }>;
+  onRemovePicked: (id: string) => void;
+  uploading?: boolean;
+  onRetryUpload?: () => void;
+  uploadError?: string | null;
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
   return (
     <div className="sticky bottom-0 bg-gradient-to-t from-background via-background/95 to-background/0">
       <div className="mx-auto max-w-[920px] px-4 pb-4">
@@ -519,14 +542,33 @@ function Composer({ value, onChange, onSend, textareaRef }: { value: string; onC
             }}
             className="min-h-[72px] resize-none border-0 focus-visible:ring-0"
           />
+          {picked.length > 0 && (
+            <div className="px-3 pb-2 flex flex-wrap gap-2">
+              {picked.map((f) => (
+                <div key={f.id} className="flex items-center gap-2 px-2 py-1 rounded-full bg-muted text-xs">
+                  <span className="truncate max-w-[200px]">{f.name}</span>
+                  <span className="text-muted-foreground">({Math.ceil(f.size/1024)} KB)</span>
+                  <button aria-label={`Remove ${f.name}`} onClick={() => onRemovePicked(f.id)} className="text-muted-foreground hover:text-foreground">×</button>
+                </div>
+              ))}
+              {uploading && <span className="text-xs text-muted-foreground">Uploading…</span>}
+              {uploadError && (
+                <div className="flex items-center gap-2 text-xs text-red-500">
+                  <span>{uploadError}</span>
+                  {onRetryUpload && <button onClick={onRetryUpload} className="underline">Retry</button>}
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between px-2 pb-2">
             <div className="flex items-center gap-2">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon"><Paperclip className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => inputRef.current?.click()} aria-label="Attach file"><Paperclip className="h-4 w-4" /></Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="pointer-events-none select-none">Attach file</TooltipContent>
               </Tooltip>
+              <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => onPickFiles(e.target.files)} />
               <Checkbox id="pin-next" />
               <label htmlFor="pin-next" className="text-xs text-muted-foreground">Pin next artifact</label>
             </div>
@@ -548,6 +590,10 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   const [messages, setMessages] = useState<Message[]>([]);
   const [composer, setComposer] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const [picked, setPicked] = useState<Array<{ id: string; file: File }>>([]);
+  const [uploaded, setUploaded] = useState<Array<{ id: string; title: string; uri: string; mime?: string; size?: number }>>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | undefined>();
@@ -614,7 +660,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
     setLoadingChats(true);
     provider.listChats(ac.signal)
       .then((list) => { if (mounted) setChats(list); })
-      .catch((e: any) => { if (e?.name !== "AbortError") { /* ignore */ } })
+  .catch((e: unknown) => { const name = (e as { name?: string } | null)?.name; if (name !== "AbortError") { /* ignore */ } })
       .finally(() => { if (mounted) setLoadingChats(false); });
     return () => { mounted = false; ac.abort(); };
   }, [provider]);
@@ -631,24 +677,68 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
     let mounted = true;
     provider.listMessages(selectedChatId, ac.signal)
       .then((list) => { if (mounted) setMessages(list); })
-      .catch((e: any) => { if (e?.name !== "AbortError") { /* ignore */ } });
+  .catch((e: unknown) => { const name = (e as { name?: string } | null)?.name; if (name !== "AbortError") { /* ignore */ } });
     return () => { mounted = false; ac.abort(); };
   }, [selectedChatId, provider]);
 
   const onSend = () => {
     if (!composer.trim()) return;
     const now = new Date().toLocaleTimeString();
-    const newMsg: Message = { id: String(Date.now()), role: "user", text: composer, createdAt: now };
+    const newMsg: Message = {
+      id: String(Date.now()),
+      role: "user",
+      text: composer,
+      createdAt: now,
+      artifacts: uploaded.map((u) => ({ id: u.id, type: "file", title: u.title, uri: u.uri }))
+    };
     setMessages((prev) => [...prev, newMsg]);
     setComposer("");
+    setPicked([]);
+    setUploaded([]);
+    setUploadError(null);
     const ac = new AbortController();
     provider
-      .sendMessage({ chatId: selectedChatId || "demo", text: newMsg.text }, ac.signal)
+      .sendMessage({ chatId: selectedChatId || "demo", text: newMsg.text, attachments: uploaded }, ac.signal)
       .then(() => {
         if (!selectedChatId) return;
         return provider.listMessages(selectedChatId).then((list) => setMessages(list));
       })
       .catch(() => { /* ignore demo errors */ });
+  };
+
+  const handlePickFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    const next = arr.map((f) => ({ id: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2)}`, file: f }));
+    setPicked((prev) => [...prev, ...next]);
+  };
+
+  useEffect(() => {
+    if (!picked.length || !provider.uploadFiles) return;
+    let cancelled = false;
+    const ac = new AbortController();
+    (async () => {
+      setUploading(true);
+      setUploadError(null);
+      try {
+  const uploadFn = provider.uploadFiles;
+  if (!uploadFn) return;
+  const res = await uploadFn(picked.map((p) => p.file), ac.signal);
+        if (!cancelled) setUploaded(res);
+      } catch (e: unknown) {
+        const name = (e as { name?: string } | null)?.name;
+        if (!cancelled && name !== "AbortError") setUploadError("Failed to upload files");
+      } finally {
+        if (!cancelled) setUploading(false);
+      }
+    })();
+    return () => { cancelled = true; ac.abort(); };
+  }, [picked, provider]);
+
+  const handleRemovePicked = (id: string) => {
+    setPicked((prev) => prev.filter((p) => p.id !== id));
+    // if removing, clear uploaded results so we don't send removed ones
+    setUploaded([]);
   };
 
   // Keyboard shortcuts
@@ -778,7 +868,18 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           </ScrollArea>
 
           {/* Composer */}
-          <Composer value={composer} onChange={setComposer} onSend={onSend} textareaRef={composerRef} />
+          <Composer
+            value={composer}
+            onChange={setComposer}
+            onSend={onSend}
+            textareaRef={composerRef}
+            onPickFiles={handlePickFiles}
+            picked={picked.map((p) => ({ id: p.id, name: p.file.name, size: p.file.size }))}
+            onRemovePicked={handleRemovePicked}
+            uploading={uploading}
+            onRetryUpload={() => setPicked((p) => [...p])}
+            uploadError={uploadError}
+          />
         </div>
 
         {/* RIGHT COLUMN: artifacts inline */}

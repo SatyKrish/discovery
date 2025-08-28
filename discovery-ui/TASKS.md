@@ -19,12 +19,12 @@ Last updated: 2025-08-28
 ## Current focus (high ROI next)
 
 ### 1) Attachments — end-to-end
-- [ ] Composer: file picker (hidden input + Paperclip button)
-- [ ] Show selected attachments as removable chips (filename, size)
-- [ ] Upload route: Next.js API proxy (`/api/uploads`) → backend; handle progress/errors
-- [ ] Provider: include uploaded attachment references/URIs in `sendMessage`
-- [ ] Artifact render: display `type: "file"` with download and preview affordances
-- [ ] Error handling: surface upload/send failures with retry and removal options
+- [x] Composer: file picker (hidden input + Paperclip button)
+- [x] Show selected attachments as removable chips (filename, size)
+- [x] Upload route: Next.js API proxy (`/api/uploads`) → backend; handle progress/errors
+- [x] Provider: include uploaded attachment references/URIs in `sendMessage`
+- [x] Artifact render: display `type: "file"` with download and preview affordances
+- [x] Error handling: surface upload/send failures with retry and removal options
 - [ ] Tests: unit (attachment state), E2E (attach → send → artifact visible)
 
 ### 2) Library view (MVP)

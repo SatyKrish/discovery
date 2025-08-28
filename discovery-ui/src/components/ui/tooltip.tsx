@@ -31,18 +31,18 @@ const TooltipTrigger: React.FC<React.HTMLAttributes<HTMLElement> & { asChild?: b
 	const handleBlur = () => ctx?.setOpen(false);
 
 	// If asChild, clone the child element and merge our event handlers
-	if (asChild && React.isValidElement(children)) {
-		const child = children as React.ReactElement<any>;
-		const merge = (userHandler?: (e: any) => void, ourHandler?: (e: any) => void) => (e: any) => {
-			try { userHandler?.(e); } finally { ourHandler?.(e); }
-		};
+		if (asChild && React.isValidElement(children)) {
+			const child = children as React.ReactElement<Record<string, unknown>>;
+			const merge = <E extends React.SyntheticEvent>(userHandler?: (e: E) => void, ourHandler?: (e: E) => void) => (e: E) => {
+				try { userHandler?.(e); } finally { ourHandler?.(e); }
+			};
 		const mergedProps = {
 			...rest,
-			className: cn(child.props.className, className),
-			onMouseEnter: merge(child.props.onMouseEnter, handleMouseEnter),
-			onMouseLeave: merge(child.props.onMouseLeave, handleMouseLeave),
-			onFocus: merge(child.props.onFocus, handleFocus),
-			onBlur: merge(child.props.onBlur, handleBlur),
+			className: cn(child.props.className as string | undefined, className),
+				onMouseEnter: merge<React.MouseEvent>(child.props.onMouseEnter as ((e: React.MouseEvent) => void) | undefined, handleMouseEnter as (e: React.MouseEvent) => void),
+				onMouseLeave: merge<React.MouseEvent>(child.props.onMouseLeave as ((e: React.MouseEvent) => void) | undefined, handleMouseLeave as (e: React.MouseEvent) => void),
+				onFocus: merge<React.FocusEvent>(child.props.onFocus as ((e: React.FocusEvent) => void) | undefined, handleFocus as (e: React.FocusEvent) => void),
+				onBlur: merge<React.FocusEvent>(child.props.onBlur as ((e: React.FocusEvent) => void) | undefined, handleBlur as (e: React.FocusEvent) => void),
 		};
 		return React.cloneElement(child, mergedProps);
 	}

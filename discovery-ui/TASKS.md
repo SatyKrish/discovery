@@ -29,10 +29,10 @@ Last updated: 2025-08-28
 - [x] Tests: unit (attachment state), E2E (attach → send → artifact visible)
 
 ### 2) Library view (MVP)
-- [ ] Fetch pinned and recent artifacts (provider additions + API proxies)
-- [ ] UI: grid/list with filters (type, pinned, recent)
-- [ ] Actions: open in chat, unpin, copy link
-- [ ] Empty and loading states
+- [x] Fetch pinned and recent artifacts (provider additions + API proxies)
+- [x] UI: grid with filters (type, pinned, recent)
+- [x] Actions: open in chat, unpin, copy link
+- [x] Empty and loading states
 - [ ] E2E: navigate → filter → unpin reflects in chat
 
 ### 3) Virtualized thread

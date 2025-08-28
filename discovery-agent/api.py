@@ -90,12 +90,15 @@ async def start_workflow(req: StartWorkflowRequest) -> WorkflowIdResponse:
     client = await get_temporal_client()
     wf_id = req.workflow_id or str(uuid.uuid4())
     try:
+        # start_workflow takes (workflow|name, first_arg?, *, args=[...], id=..., task_queue=...)
         handle = await client.start_workflow(
             DeepAgentWorkflow.run,
-            req.question,
-            req.instructions,
-            req.tools,
-            req.mcp_endpoints,
+            args=[
+                req.question,
+                req.instructions,
+                req.tools,
+                req.mcp_endpoints,
+            ],
             id=wf_id,
             task_queue=os.getenv("TEMPORAL_TASK_QUEUE", "deep-agent-task-queue"),
         )

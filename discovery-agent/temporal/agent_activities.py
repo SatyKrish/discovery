@@ -15,7 +15,11 @@ from typing import Any, Dict
 
 from temporalio import activity
 
-from tool_registry import TOOL_REGISTRY
+# Support both package and direct module imports
+try:
+    from .tool_registry import TOOL_REGISTRY
+except Exception:  # pragma: no cover - fallback for test import style
+    from tool_registry import TOOL_REGISTRY
 
 
 @dataclass

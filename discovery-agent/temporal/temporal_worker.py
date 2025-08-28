@@ -13,6 +13,7 @@ avoid stalling the worker's event loop.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Sequence
@@ -24,11 +25,19 @@ from temporalio.common import RawValue
 from temporalio.converter import DataConverter
 from temporalio.worker import Worker
 
-from agent_activities import AgentActivities
-from tool_registry import TOOL_REGISTRY
-from temporal_workflow import DeepAgentWorkflow, run_query
+# Support both package and direct module imports (for tests)
+try:
+    from .agent_activities import AgentActivities
+    from .tool_registry import TOOL_REGISTRY
+    from .temporal_workflow import DeepAgentWorkflow, run_query
+except Exception:  # pragma: no cover - fallback for test import style
+    from agent_activities import AgentActivities
+    from tool_registry import TOOL_REGISTRY
+    from temporal_workflow import DeepAgentWorkflow, run_query
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 # Dynamic dispatcher ---------------------------------------------------------
@@ -68,6 +77,11 @@ async def main() -> None:
     os.getenv("AZURE_OPENAI_DEPLOYMENT", "")
     os.getenv("AZURE_OPENAI_API_KEY", "")
 
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+    logger.info(
+        "Starting Temporal worker: address=%s, task_queue=%s", temporal_address, task_queue
+    )
+
     client = await Client.connect(temporal_address)
 
     activities = AgentActivities()
@@ -86,8 +100,12 @@ async def main() -> None:
         activities=activity_funcs,
         activity_executor=ThreadPoolExecutor(),
     )
+    logger.info("Worker started. Waiting for tasks… Press Ctrl+C to stop.")
     await worker.run()
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution only
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nWorker stopped by user.")

@@ -24,7 +24,11 @@ if TYPE_CHECKING:  # pragma: no cover - hints only
 
 
 def create_deep_agent(*args, **kwargs):  # pragma: no cover - runtime import
-    from deep_agent import create_deep_agent as _create
+    # Support both package and direct module imports
+    try:
+        from .deep_agent import create_deep_agent as _create
+    except Exception:  # pragma: no cover - fallback for test import style
+        from deep_agent import create_deep_agent as _create
     return _create(*args, **kwargs)
 
 

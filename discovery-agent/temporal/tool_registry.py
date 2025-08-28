@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Callable, Dict
 
-from registries import ToolArgument, ToolDefinition
+# Support both package and direct module imports
+try:
+    from .registries import ToolArgument, ToolDefinition
+except Exception:  # pragma: no cover - fallback for test import style
+    from registries import ToolArgument, ToolDefinition
 
 
 def add(a: int, b: int) -> int:

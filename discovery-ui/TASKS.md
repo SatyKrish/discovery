@@ -36,8 +36,8 @@ Last updated: 2025-08-28
 - [x] E2E: navigate → filter → unpin reflects in chat
 
 ### 3) Virtualized thread
-- [ ] Integrate list virtualization (e.g., `@tanstack/react-virtual`)
-- [ ] Maintain autoscroll on new messages; preserve scroll on image/table loads
+- [x] Integrate list virtualization (`@tanstack/react-virtual`) with fallback in tests
+- [x] Maintain autoscroll to bottom on new messages; preserve position via element measurement
 - [ ] Tests: large thread smoke (performance sanity)
 
 ### 4) Responsive/mobile polish

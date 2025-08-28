@@ -7,10 +7,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discovery-agent
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt pytest pytest-asyncio
-      - run: pytest
+          cache: 'pip'
+          cache-dependency-path: discovery-agent/requirements.txt
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pytest pytest-asyncio
+      - name: Run tests
+        run: pytest -q

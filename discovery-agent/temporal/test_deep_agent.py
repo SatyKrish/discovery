@@ -3,6 +3,7 @@ import types
 import pytest
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from pathlib import Path
+from typing import Any
 
 
 # Provide lightweight stubs for the optional MCP client modules so the
@@ -101,22 +102,31 @@ async def test_create_deep_agent_applies_base_prompt():
 
 
 @pytest.mark.asyncio
-async def test_run_query_uses_factory(monkeypatch):
-    called = {}
+async def test_run_query_forwards_tools_and_endpoints(monkeypatch):
+    called: dict[str, Any] = {}
 
-    async def stub_agent(question, instructions=""):
+    async def stub_run_agent(question, instructions="", **kwargs):
         called["args"] = (question, instructions)
+        called["kwargs"] = kwargs
         return "ok"
 
-    def stub_factory(**kwargs):
-        called["factory_kwargs"] = kwargs
-        return stub_agent
+    dummy_tool = object()
 
-    monkeypatch.setattr(temporal_workflow, "create_deep_agent", stub_factory)
+    def stub_load_tool(spec: str):
+        called.setdefault("loaded", []).append(spec)
+        return dummy_tool
 
-    result = await temporal_workflow.run_query("Q", "I")
+    monkeypatch.setattr(temporal_workflow, "run_agent", stub_run_agent)
+    monkeypatch.setattr(temporal_workflow, "_load_tool", stub_load_tool)
+
+    result = await temporal_workflow.run_query(
+        "Q", "I", tools=["pkg:tool"], mcp_endpoints=["http://server"]
+    )
     assert result == "ok"
     assert called["args"] == ("Q", "I")
+    assert called["kwargs"]["tools"] == [dummy_tool]
+    assert called["kwargs"]["mcp_endpoints"] == ["http://server"]
+    assert called["loaded"] == ["pkg:tool"]
 
 
 class ToolCallingModel:

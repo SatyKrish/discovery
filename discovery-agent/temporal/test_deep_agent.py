@@ -118,3 +118,58 @@ async def test_run_query_uses_factory(monkeypatch):
     assert result == "ok"
     assert called["args"] == ("Q", "I")
 
+
+class ToolCallingModel:
+    """Model that triggers a call_subagent tool call on first invoke."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def bind_tools(self, tools):
+        self.tools = tools
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "1",
+                        "name": "call_subagent",
+                        "args": {"question": "sub", "subagent": "code"},
+                    }
+                ],
+            )
+        elif self.calls == 2:
+            return AIMessage(content="inner")
+        return AIMessage(content="outer")
+
+
+@pytest.mark.asyncio
+async def test_call_subagent_forwards_factory_config(monkeypatch):
+    import deep_agent
+
+    calls = []
+    orig = deep_agent.run_agent
+
+    async def recording_run_agent(*args, **kwargs):
+        calls.append((args, kwargs))
+        return await orig(*args, **kwargs)
+
+    monkeypatch.setattr(deep_agent, "run_agent", recording_run_agent)
+
+    model = ToolCallingModel()
+    sub_cfg = {"code": {"instructions": "do code"}}
+    agent = deep_agent.create_deep_agent(
+        base_prompt="PROMPT", model=model, subagents=sub_cfg
+    )
+    result = await agent("task")
+    assert result == "outer"
+    assert len(calls) == 2
+    _, inner_kwargs = calls[1]
+    assert inner_kwargs.get("base_prompt") == "PROMPT"
+    assert inner_kwargs.get("model") is model
+    assert inner_kwargs.get("subagents") == sub_cfg
+

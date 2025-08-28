@@ -191,6 +191,9 @@ async def run_agent(
             on_tool_call=on_tool_call,
             _state=state,
             _steps=_steps,
+            base_prompt=base_prompt,
+            model=model,
+            subagents=subagents,
         )
 
     builtin_tools: List[BaseTool] = [

@@ -10,7 +10,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// Removed table imports not used in the minimal prototype version
 import { Badge } from "@/components/ui/badge";
 import { Send, Paperclip, Search, Plus, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -119,13 +118,15 @@ function ThemeToggleInline() {
   useEffect(() => { if (typeof document !== "undefined") { document.documentElement.classList.toggle("dark", dark); document.documentElement.setAttribute("data-theme", dark ? "dark" : "light"); try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch {} } }, [dark]);
   return (
     <TooltipProvider>
-      <Tooltip>
+  <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="outline" size="icon" onClick={() => setDark(!dark)} aria-label={dark ? "Switch to light" : "Switch to dark"}>
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{dark ? "Light mode" : "Dark mode"}</TooltipContent>
+        <TooltipContent side="top" className="pointer-events-none select-none">
+          {dark ? "Light mode" : "Dark mode"}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
@@ -318,7 +319,12 @@ function Composer({ value, onChange, onSend }: { value: string; onChange: (v: st
           />
           <div className="flex items-center justify-between px-2 pb-2">
             <div className="flex items-center gap-2">
-              <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon"><Paperclip className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Attach file</TooltipContent></Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon"><Paperclip className="h-4 w-4" /></Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="pointer-events-none select-none">Attach file</TooltipContent>
+              </Tooltip>
               <Checkbox id="pin-next" />
               <label htmlFor="pin-next" className="text-xs text-muted-foreground">Pin next artifact</label>
             </div>

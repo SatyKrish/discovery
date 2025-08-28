@@ -13,9 +13,10 @@ sys.path.append(str(root_dir / "temporal"))
 
 # Remove any previously injected temporalio stub from other tests
 sys.modules.pop("temporalio", None)
-# Ensure any previous import of the workflow module using stubbed Temporal
-# definitions is cleared so we can import the real implementation.
+# Ensure any previous imports that used stubbed Temporal definitions are
+# cleared so the real implementations can be re-imported.
 sys.modules.pop("temporal_workflow", None)
+sys.modules.pop("agent_activities", None)
 # Provide a lightweight stub for openai_model to avoid heavy dependency in tests
 sys.modules.setdefault("openai_model", types.SimpleNamespace(get_default_model=lambda: None))
 

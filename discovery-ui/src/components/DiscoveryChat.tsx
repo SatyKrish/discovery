@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Send, Paperclip, Search, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown, Pencil, Image as ImageIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
 
 /***********************************
  * Types
@@ -31,6 +32,7 @@ export interface DiscoveryAgentDataProvider {
   listMessages(chatId: string, signal?: AbortSignal): Promise<Message[]>;
   sendMessage(params: { chatId: string; text: string }, signal?: AbortSignal): Promise<void>;
   togglePin?(params: { chatId: string; artifactId: string }, signal?: AbortSignal): Promise<void>;
+  createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
 }
 
 export const NoopProvider: DiscoveryAgentDataProvider = {
@@ -60,6 +62,7 @@ function Sidebar({
   isLoading?: boolean;
 }) {
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
   const focusSearch = () => {
     if (collapsed) {
       setCollapsed(false);
@@ -68,6 +71,18 @@ function Sidebar({
       searchInputRef.current?.focus();
     }
   };
+  // external request to focus search (for Cmd+K)
+  useEffect(() => {
+    const handler = () => focusSearch();
+    window.addEventListener("discovery:focus-chat-search", handler as EventListener);
+    return () => window.removeEventListener("discovery:focus-chat-search", handler as EventListener);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return chats;
+    return chats.filter((c) => c.title.toLowerCase().includes(q));
+  }, [chats, query]);
   return (
     <div className={cn("h-full w-full flex flex-col border-r bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60")}> 
       <div className="px-3 py-2 flex items-center gap-2 h-14 border-b">
@@ -98,9 +113,17 @@ function Sidebar({
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant="secondary" className="h-9 w-9 rounded-full" onClick={() => { /* TODO: open library */ }} aria-label="Library" title="Library">
+                <Link
+                  href="/library"
+                  aria-label="Library"
+                  title="Library"
+                  className={cn(
+                    buttonVariants({ variant: "secondary", size: "icon" }),
+                    "h-9 w-9 rounded-full inline-flex"
+                  )}
+                >
                   <ImageIcon className="h-4 w-4" />
-                </Button>
+                </Link>
               </TooltipTrigger>
               <TooltipContent side="right">Library</TooltipContent>
             </Tooltip>
@@ -113,9 +136,12 @@ function Sidebar({
             <Button variant="ghost" className="w-full justify-start gap-2" onClick={focusSearch}>
               <Search className="h-4 w-4" /> Search chats
             </Button>
-            <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => { /* TODO: open library */ }}>
+            <Link
+              href="/library"
+              className={cn(buttonVariants({ variant: "ghost" }), "w-full justify-start gap-2")}
+            >
               <ImageIcon className="h-4 w-4" /> Library
-            </Button>
+            </Link>
           </div>
         )}
       </div>
@@ -124,7 +150,13 @@ function Sidebar({
         <div className="px-3 pb-2">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input ref={searchInputRef} placeholder="Search chats" className="pl-7 h-8" />
+            <Input
+              ref={searchInputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search chats"
+              className="pl-7 h-8"
+            />
           </div>
         </div>
       )}
@@ -133,12 +165,15 @@ function Sidebar({
         <div className={cn("px-2 pb-2 space-y-1")}> 
           {isLoading && Array.from({ length: 6 }).map((_, i) => (<div key={i} className="h-9 rounded-md bg-muted animate-pulse"/>))}
           {/* no empty-state message for chats list */}
-          {!isLoading && chats.map((c) => (
+          {!isLoading && filtered.map((c) => (
             <button key={c.id} onClick={() => onSelect(c.id)} className={cn("w-full rounded-lg border px-3 py-2 text-left hover:bg-muted/50 transition", selectedId === c.id ? "border-primary/40 bg-muted" : "border-border/60 bg-background")}>
               <div className="truncate text-sm text-foreground">{c.title}</div>
               {c.lastActivity && <div className="text-[10px] text-muted-foreground mt-1">{c.lastActivity}</div>}
             </button>
           ))}
+          {!isLoading && filtered.length === 0 && (
+            <div className="text-xs text-muted-foreground px-3 py-2">No chats match “{query}”.</div>
+          )}
         </div>
       </ScrollArea>
 
@@ -172,7 +207,7 @@ function ThemeToggleInline() {
 /***********************************
  * Artifact preview (minimal)
  ***********************************/
-function ArtifactPreview({ artifact }: { artifact: Artifact }) {
+function ArtifactPreview({ artifact, onTogglePin }: { artifact: Artifact; onTogglePin?: (artifactId: string) => void }) {
   return (
     <Card className="rounded-2xl shadow-sm border-border/60">
       <CardHeader className="p-4">
@@ -197,7 +232,9 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
       </CardContent>
       <CardFooter className="p-4 pt-0 flex gap-2">
         <Button size="sm" variant="outline">Expand</Button>
-        <Button size="sm" variant="ghost" className="text-muted-foreground"><PinIcon className="h-4 w-4 mr-1" /> {artifact.pinned ? "Unpin" : "Pin"}</Button>
+        <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => onTogglePin?.(artifact.id)}>
+          <PinIcon className={cn("h-4 w-4 mr-1", artifact.pinned && "text-primary")}/> {artifact.pinned ? "Unpin" : "Pin"}
+        </Button>
       </CardFooter>
     </Card>
   );
@@ -310,7 +347,7 @@ function formatCell(v: unknown) {
 /***********************************
  * Message Bubble
  ***********************************/
-function MessageBubble({ m }: { m: Message }) {
+function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifactId: string) => void }) {
   const isUser = m.role === "user";
   return (
     <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}> 
@@ -326,7 +363,7 @@ function MessageBubble({ m }: { m: Message }) {
         {m.artifacts?.length ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
             {m.artifacts.map((a) => (
-              <ArtifactPreview key={a.id} artifact={a} />
+              <ArtifactPreview key={a.id} artifact={a} onTogglePin={onTogglePin} />
             ))}
           </div>
         ) : null}
@@ -416,6 +453,21 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
     setSelectedChatId(id);
     // focus composer shortly after
     setTimeout(() => composerRef.current?.focus(), 0);
+    // Try to persist to backend
+    if (provider.createChat) {
+      const ac = new AbortController();
+      provider.createChat({ title: newChat.title }, ac.signal).then((serverChat: Chat | null) => {
+        if (serverChat) {
+          setChats((prev) => {
+            // Replace the local temp chat with the server chat by id
+            const replaced = prev.map((c) => (c.id === id ? serverChat : c));
+            // If temp chat moved, ensure server chat is selected
+            return replaced;
+          });
+          setSelectedChatId(serverChat.id);
+        }
+      }).catch(() => {/* ignore */});
+    }
   };
 
   // listen for global events to start new chat or focus composer
@@ -474,8 +526,59 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
       .catch(() => { /* ignore demo errors */ });
   };
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isMeta = e.metaKey || (e.ctrlKey && navigator.platform.indexOf("Mac") === -1);
+      // Cmd+N: new chat
+      if (isMeta && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        handleNewChat();
+        return;
+      }
+      // Cmd+K: focus chat search
+      if (isMeta && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        try { window.dispatchEvent(new Event("discovery:focus-chat-search")); } catch {}
+        return;
+      }
+      // Cmd+/ : toggle sidebar
+      if (isMeta && !e.shiftKey && !e.altKey && e.key === "/") {
+        e.preventDefault();
+        setCollapsed((v) => !v);
+        return;
+      }
+      // Cmd+Shift+A: toggle artifacts panel
+      if (isMeta && e.shiftKey && !e.altKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setArtifactsOpen((v) => !v);
+        return;
+      }
+      // Esc: blur active element
+      if (!isMeta && !e.shiftKey && !e.altKey && e.key === "Escape") {
+        const el = document.activeElement as HTMLElement | null;
+        if (el && typeof el.blur === "function") el.blur();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const selectedChat = useMemo(() => chats.find((c) => c.id === selectedChatId), [chats, selectedChatId]);
   const allArtifacts = useMemo(() => messages.flatMap(m => m.artifacts ?? []), [messages]);
+
+  const handleTogglePin = (artifactId: string) => {
+    // optimistic local toggle
+    setMessages((prev) => prev.map((m) => ({
+      ...m,
+      artifacts: m.artifacts?.map((a) => a.id === artifactId ? { ...a, pinned: !a.pinned } : a)
+    })));
+    // best-effort server call
+    if (provider.togglePin && selectedChatId) {
+      const ac = new AbortController();
+      provider.togglePin({ chatId: selectedChatId, artifactId }, ac.signal).catch(() => {/* ignore */});
+    }
+  };
 
   return (
     <TooltipProvider>
@@ -527,7 +630,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           <ScrollArea className="flex-1 p-4">
             <div className="mx-auto w-full max-w-[920px] space-y-6">
               {messages.map((m) => (
-                <MessageBubble key={m.id} m={m} />
+                <MessageBubble key={m.id} m={m} onTogglePin={handleTogglePin} />
               ))}
             </div>
           </ScrollArea>
@@ -542,7 +645,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           <ScrollArea className="h-[calc(100vh-3.5rem)] p-3">
             <div className="grid grid-cols-1 gap-3">
               {allArtifacts.length ? (
-                allArtifacts.map((a) => <ArtifactPreview key={a.id} artifact={a} />)
+                allArtifacts.map((a) => <ArtifactPreview key={a.id} artifact={a} onTogglePin={handleTogglePin} />)
               ) : (
                 <div className="text-sm text-muted-foreground p-6 text-center">No artifacts yet</div>
               )}

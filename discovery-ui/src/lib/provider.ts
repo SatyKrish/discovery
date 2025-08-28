@@ -8,6 +8,7 @@ export interface DiscoveryAgentDataProvider {
   listMessages(chatId: string, signal?: AbortSignal): Promise<Message[]>;
   sendMessage(params: { chatId: string; text: string }, signal?: AbortSignal): Promise<void>;
   togglePin?(params: { chatId: string; artifactId: string }, signal?: AbortSignal): Promise<void>;
+  createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
 }
 
 export const HttpProvider: DiscoveryAgentDataProvider = {
@@ -51,6 +52,24 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
   },
   async togglePin() {
     // no-op demo implementation
+  },
+  async createChat(params, signal) {
+    try {
+      const res = await fetch("/api/chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params ?? {}),
+        signal
+      });
+      if (!res.ok) return null;
+      const data: unknown = await res.json().catch(() => ({} as unknown));
+      // Try to normalize from either the response root or nested under `chat`
+      const candidate = (data as any)?.chat ?? data;
+      return normalizeChat(candidate);
+    } catch (e: any) {
+      if (e?.name === "AbortError") return null;
+      return null;
+    }
   }
 };
 

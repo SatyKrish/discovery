@@ -1,5 +1,14 @@
 export type Role = "user" | "agent" | "tool";
-export type Artifact = { id: string; type: "chart.vegaLite" | "table.json" | "file"; title: string; uri?: string; json?: unknown; pinned?: boolean };
+export type ArtifactType = "chart.vegaLite" | "chart.recharts" | "table.json" | "file";
+export type Artifact = {
+  id: string;
+  type: ArtifactType;
+  title: string;
+  uri?: string;
+  json?: unknown;
+  pinned?: boolean;
+  chatId?: string;
+};
 export type Message = { id: string; role: Role; text: string; createdAt: string; artifacts?: Artifact[] };
 export type Chat = { id: string; title: string; lastActivity?: string };
 
@@ -11,6 +20,7 @@ export interface DiscoveryAgentDataProvider {
   createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
   deleteChat?(chatId: string, signal?: AbortSignal): Promise<void>;
   uploadFiles?(files: File[], signal?: AbortSignal): Promise<Array<{ id: string; title: string; uri: string; mime?: string; size?: number }>>;
+  listArtifacts?(params?: { filter?: "pinned" | "recent"; type?: ArtifactType }, signal?: AbortSignal): Promise<Artifact[]>;
 }
 
 export const HttpProvider: DiscoveryAgentDataProvider = {
@@ -76,8 +86,17 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
       return [];
     }
   },
-  async togglePin() {
-    // no-op demo implementation
+  async togglePin(params, signal) {
+    try {
+      await fetch("/api/artifacts/toggle-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params ?? {}),
+        signal,
+      });
+    } catch {
+      return;
+    }
   },
   async createChat(params, signal) {
     try {
@@ -105,6 +124,22 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
   } catch {
       // ignore abort/network errors for demo
       return;
+    }
+  },
+  async listArtifacts(params, signal) {
+    try {
+      const qs = new URLSearchParams();
+      if (params?.filter) qs.set(params.filter, "true");
+      if (params?.type) qs.set("type", params.type);
+      const res = await fetch(`/api/artifacts${qs.toString() ? `?${qs.toString()}` : ""}`, { signal, cache: "no-store" });
+      if (!res.ok) return [];
+      const data: unknown = await res.json().catch(() => [] as unknown);
+      const list = extractArray(data, ["artifacts", "data", "items"]);
+      return list.map(normalizeArtifact).filter(isDefined);
+    } catch (e: unknown) {
+      const name = (e as { name?: string } | null)?.name;
+      if (name === "AbortError") return [];
+      return [];
     }
   }
 };
@@ -147,6 +182,28 @@ function normalizeMessage(x: unknown): Message | null {
   const artifacts = Array.isArray((x as Dict)["artifacts"]) ? ((x as Dict)["artifacts"] as Artifact[]) : undefined;
   if (!text) return null;
   return { id: String(id), role, text: String(text), createdAt: String(createdAt), artifacts };
+}
+
+function normalizeArtifact(x: unknown): Artifact | null {
+  if (!isRecord(x)) return null;
+  const id = (x as Dict)["id"] ?? (x as Dict)["artifact_id"] ?? (x as Dict)["uuid"] ?? (x as Dict)["_id"];
+  const title = (x as Dict)["title"] ?? (x as Dict)["name"] ?? (id ? `Artifact ${id}` : undefined);
+  const typeRaw = (x as Dict)["type"] ?? (x as Dict)["kind"];
+  const type = (typeof typeRaw === "string" ? typeRaw : "file") as ArtifactType;
+  const uri = (x as Dict)["uri"] ?? (x as Dict)["url"] ?? (x as Dict)["path"];
+  const pinned = Boolean((x as Dict)["pinned"] ?? (x as Dict)["is_pinned"]);
+  const json = (x as Dict)["json"] ?? (x as Dict)["spec"];
+  const chatId = (x as Dict)["chatId"] ?? (x as Dict)["chat_id"];
+  if (!id || !title) return null;
+  return {
+    id: String(id),
+    title: String(title),
+    type,
+    uri: typeof uri === "string" ? uri : undefined,
+    pinned,
+    json,
+    chatId: chatId ? String(chatId) : undefined,
+  };
 }
 
 export function normalizeUploadItem(x: unknown): { id: string; title: string; uri: string; mime?: string; size?: number } | null {

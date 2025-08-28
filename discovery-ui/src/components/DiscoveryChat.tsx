@@ -617,6 +617,15 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // pick chat from URL query if provided (e.g., /?chatId=123)
+  useEffect(() => {
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      const cid = qs.get("chatId");
+      if (cid) setSelectedChatId(cid);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (selectedChatId) {
       try { localStorage.setItem("discovery:lastChatId", selectedChatId); } catch {}

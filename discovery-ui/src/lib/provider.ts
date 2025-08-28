@@ -192,15 +192,38 @@ export const FastApiProvider: DiscoveryAgentDataProvider = {
       return [];
     }
   },
-  async sendMessage(body, _signal?: AbortSignal) {
+  async sendMessage(body, signal?: AbortSignal) {
+    // Fetch current history length so we know when a new agent reply appears
+    let prevLen = 0;
+    try {
+      const before = await FastApiProvider.listMessages(body.chatId, signal);
+      prevLen = before.length;
+    } catch {
+      prevLen = 0;
+    }
+
     try {
       await fetch(`${FASTAPI_BASE}/workflow/${encodeURIComponent(body.chatId)}/prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: body.text }),
+        signal,
       });
     } catch {
       return;
+    }
+
+    // Poll for a new agent message for up to ~15s
+    const start = Date.now();
+    while (!signal?.aborted && Date.now() - start < 15000) {
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const msgs = await FastApiProvider.listMessages(body.chatId, signal);
+        if (msgs.slice(prevLen).some((m) => m.role === "agent")) return;
+      } catch (e: unknown) {
+        const name = (e as { name?: string } | null)?.name;
+        if (name === "AbortError") return;
+      }
     }
   },
   async deleteChat(chatId, _signal?: AbortSignal) {

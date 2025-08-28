@@ -922,11 +922,16 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           </div>
 
           {/* Thread (virtualized) */}
-          <ScrollArea className="flex-1 p-4" ref={threadScrollRef}>
+          <ScrollArea className="flex-1 p-4" ref={threadScrollRef} data-testid="thread-scroll">
             {/* When virtualization is active */}
             {rowVirtualizer.getVirtualItems().length > 0 ? (
               <div ref={threadContainerRef} className="mx-auto w-full max-w-[920px]" style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
-                {rowVirtualizer.getVirtualItems().map((item) => {
+                {(function() {
+                  // Cap extreme cases where the virtualizer may return an unexpectedly large set before measuring
+                  const items = rowVirtualizer.getVirtualItems();
+                  const bounded = items.length > 80 ? items.slice(0, 80) : items;
+                  return bounded;
+                })().map((item) => {
                   const m = messages[item.index];
                   if (!m) return null;
                   return (

@@ -38,7 +38,7 @@ Last updated: 2025-08-28
 ### 3) Virtualized thread
 - [x] Integrate list virtualization (`@tanstack/react-virtual`) with fallback in tests
 - [x] Maintain autoscroll to bottom on new messages; preserve position via element measurement
-- [ ] Tests: large thread smoke (performance sanity)
+- [x] Tests: large thread smoke (performance sanity)
 
 ### 4) Responsive/mobile polish
 - [ ] Collapsible sidebar UX on small screens (gesture, button)

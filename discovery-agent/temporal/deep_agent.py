@@ -1,4 +1,4 @@
-"""Minimal DeepAgent implementation used by Temporal workflows.
+"""Minimal DeepAgent implementation and factory used by Temporal workflows.
 
 This module provides a very small yet capable autonomous agent that mirrors the
 behaviour of the LangGraph DeepAgent.  It maintains an in-memory filesystem and

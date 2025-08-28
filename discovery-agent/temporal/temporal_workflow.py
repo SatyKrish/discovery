@@ -1,9 +1,9 @@
 """Temporal workflow that runs the custom DeepAgent implementation.
 
-The workflow delegates execution to an activity that instantiates and runs
-our minimal DeepAgent powered by OpenAI's tool calling.  This provides the
-same capabilities as the original LangGraph version while leveraging
-Temporal's reliability semantics.
+The workflow delegates execution to an activity that constructs a DeepAgent
+via :func:`~deep_agent.create_deep_agent` and runs it using OpenAI's tool
+calling.  This provides the same capabilities as the original LangGraph
+version while leveraging Temporal's reliability semantics.
 
 Connections to external [MCP](https://github.com/modelcontextprotocol)
 servers or additional LangChain tools can be supplied when starting the
@@ -30,7 +30,7 @@ from typing import Sequence
 from langchain_core.tools import BaseTool
 from temporalio import activity, workflow
 
-from deep_agent import run_agent
+from deep_agent import create_deep_agent
 
 
 def _load_tool(spec: str) -> BaseTool:
@@ -55,12 +55,8 @@ async def run_query(
 ) -> str:
     """Execute the DeepAgent for the supplied question."""
     tool_objs = [_load_tool(t) for t in tools] if tools else None
-    return await run_agent(
-        question,
-        instructions,
-        tools=tool_objs,
-        mcp_endpoints=mcp_endpoints,
-    )
+    agent = create_deep_agent(tools=tool_objs, mcp_endpoints=mcp_endpoints)
+    return await agent(question, instructions)
 
 
 @workflow.defn

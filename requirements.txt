@@ -1,0 +1,2 @@
+-r discovery-agent/requirements.txt
+fastapi

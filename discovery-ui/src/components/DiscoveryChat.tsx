@@ -15,12 +15,25 @@ import { Send, Paperclip, Search, MoreVertical, Pin as PinIcon, Menu, Sun, Moon,
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+} from "recharts";
 
 /***********************************
  * Types
  ***********************************/
 export type Role = "user" | "agent" | "tool";
-export type Artifact = { id: string; type: "chart.vegaLite" | "table.json" | "file"; title: string; uri?: string; json?: unknown; pinned?: boolean };
+export type Artifact = { id: string; type: "chart.vegaLite" | "chart.recharts" | "table.json" | "file"; title: string; uri?: string; json?: unknown; pinned?: boolean };
 export type Message = { id: string; role: Role; text: string; createdAt: string; artifacts?: Artifact[] };
 export type Chat = { id: string; title: string; lastActivity?: string };
 
@@ -244,6 +257,8 @@ function ArtifactPreview({ artifact, onTogglePin }: { artifact: Artifact; onTogg
       <CardContent className="p-4 pt-0">
         {artifact.type === "table.json" ? (
           <TableArtifact artifact={artifact} />
+        ) : artifact.type === "chart.recharts" || artifact.type === "chart.vegaLite" ? (
+          <ChartArtifact artifact={artifact} />
         ) : (
           <div className="h-24 flex items-center justify-center bg-muted/30 rounded-md text-sm text-foreground">
             <FileDown className="h-4 w-4 mr-2" /> {artifact.title}
@@ -362,6 +377,96 @@ function formatCell(v: unknown) {
     try { return <span className="text-xs text-muted-foreground break-words">{JSON.stringify(v)}</span>; } catch { /* noop */ }
   }
   return String(v);
+}
+
+/***********************************
+ * Chart Artifact (Recharts minimal)
+ ***********************************/
+type ChartSpec = {
+  kind?: "line" | "bar" | "area";
+  data?: Array<Record<string, any>>;
+  xKey?: string;
+  yKey?: string;
+  color?: string;
+};
+
+function normalizeChart(input: unknown): ChartSpec {
+  if (!input || typeof input !== "object") return {};
+  const o = input as Record<string, unknown>;
+  const kind = (typeof o.kind === "string" ? o.kind : "line") as ChartSpec["kind"];
+  const data = Array.isArray(o.data) ? (o.data as Array<Record<string, any>>) : [];
+  const xKey = typeof o.xKey === "string" ? (o.xKey as string) : (data[0] ? Object.keys(data[0])[0] : undefined);
+  const yKey = typeof o.yKey === "string" ? (o.yKey as string) : (data[0] ? Object.keys(data[0])[1] : undefined);
+  const color = typeof o.color === "string" ? (o.color as string) : "hsl(var(--primary))";
+  return { kind, data, xKey, yKey, color };
+}
+
+function ChartArtifact({ artifact }: { artifact: Artifact }) {
+  const [spec, setSpec] = useState<ChartSpec>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ac = new AbortController();
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        let input: unknown = artifact.json;
+        if (!input && artifact.uri) {
+          const res = await fetch(artifact.uri, { cache: "no-store", signal: ac.signal });
+          if (!res.ok) throw new Error(`Failed to fetch chart: ${res.status}`);
+          input = await res.json();
+        }
+        const s = normalizeChart(input);
+        if (!cancelled) setSpec(s);
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
+        if (!cancelled) setError("Failed to load chart data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; ac.abort(); };
+  }, [artifact]);
+
+  if (loading) return <div className="h-40 rounded-md bg-muted animate-pulse" />;
+  if (error) return <div className="text-sm text-red-500">{error}</div>;
+  if (!spec.data?.length || !spec.xKey || !spec.yKey) return <div className="text-sm text-muted-foreground">No chart data</div>;
+
+  const commonAxes = (
+    <>
+      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+      <XAxis dataKey={spec.xKey} tickMargin={8} />
+      <YAxis tickMargin={8} />
+      <RechartsTooltip />
+    </>
+  );
+
+  return (
+    <div className="w-full h-[260px]">
+      <ResponsiveContainer width="100%" height="100%">
+        {spec.kind === "bar" ? (
+          <BarChart data={spec.data}>
+            {commonAxes}
+            <Bar dataKey={spec.yKey} fill={spec.color} />
+          </BarChart>
+        ) : spec.kind === "area" ? (
+          <AreaChart data={spec.data}>
+            {commonAxes}
+            <Area dataKey={spec.yKey} stroke={spec.color} fill={spec.color} />
+          </AreaChart>
+        ) : (
+          <LineChart data={spec.data}>
+            {commonAxes}
+            <Line type="monotone" dataKey={spec.yKey} stroke={spec.color} strokeWidth={2} dot={false} />
+          </LineChart>
+        )}
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 /***********************************

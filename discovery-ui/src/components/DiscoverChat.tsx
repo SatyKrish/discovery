@@ -229,7 +229,7 @@ function Composer({ value, onChange, onSend }: { value: string; onChange: (v: st
 /***********************************
  * Root UI (Grid with collapsible left + inline right)
  ***********************************/
-export default function DiscoveryAgentUI({ provider = NoopProvider }: { provider?: DiscoveryAgentDataProvider }) {
+export default function DiscoveryChat({ provider = NoopProvider }: { provider?: DiscoveryAgentDataProvider }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [composer, setComposer] = useState("");
 

@@ -133,9 +133,6 @@ function Sidebar({
             <Button variant="ghost" className="w-full justify-start gap-2" onClick={onNew}>
               <Pencil className="h-4 w-4" /> New chat
             </Button>
-            <Button variant="ghost" className="w-full justify-start gap-2" onClick={focusSearch}>
-              <Search className="h-4 w-4" /> Search chats
-            </Button>
             <Link
               href="/library"
               className={cn(buttonVariants({ variant: "ghost" }), "w-full justify-start gap-2")}

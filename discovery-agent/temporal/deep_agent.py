@@ -1,11 +1,11 @@
 """Minimal DeepAgent implementation used by Temporal workflows.
 
-This version mirrors the capabilities of the LangGraph DeepAgent but is
-implemented without any LangGraph dependency.  It maintains an in-memory
-filesystem and todo list, exposes those via built-in tools, and can
-recursively delegate work through a ``call_subagent`` tool.  The agent uses
-OpenAI's tool-calling to decide when to invoke tools and stops when the model
-returns a final message with no tool calls.
+This module provides a very small yet capable autonomous agent that mirrors the
+behaviour of the LangGraph DeepAgent.  It maintains an in-memory filesystem and
+todo list, exposes those via built-in tools, and can recursively delegate work
+through a ``call_subagent`` tool.  The agent uses OpenAI's tool-calling to
+decide when to invoke tools and stops when the model returns a final message
+with no tool calls.
 
 Subagents are configured via a registry mapping names to instruction strings
 and optional metadata.  The ``router`` tool selects a subagent based on a
@@ -13,17 +13,20 @@ natural-language description.  ``call_subagent`` accepts either an explicit
 subagent name or a description and dispatches to :func:`run_agent` with the
 corresponding instructions.
 
-Tools from external MCP servers or direct :class:`~langchain_core.tools.BaseTool`
-instances can augment the agent.  Any provided tools are merged with the
-built-ins before the model is bound::
+External MCP servers or direct :class:`~langchain_core.tools.BaseTool` instances
+can augment the agent.  Any provided tools are merged with the built-ins before
+the model is bound::
 
     from langchain_community.tools import RequestsGetTool
 
-    await run_agent(
-        "2 + 2?",
-        tools=[RequestsGetTool()],
-        mcp_endpoints=["http://localhost:8000/mcp"],
-    )
+    agent = create_deep_agent(tools=[RequestsGetTool()])
+    await agent("2 + 2?")
+
+``create_deep_agent`` is a small factory that fixes the base prompt, language
+model, subagent registry, default tools, and step limit.  It returns an async
+callable that mirrors :func:`run_agent` but with those configuration options
+pre-applied, making it easier for callers to construct agents with consistent
+defaults.
 """
 
 from __future__ import annotations
@@ -58,15 +61,15 @@ SUBAGENTS: Dict[str, Dict[str, Any]] = {
 }
 
 
-def _select_subagent(description: str) -> str:
+def _select_subagent(description: str, subagents: Dict[str, Dict[str, Any]]) -> str:
     """Heuristically choose a subagent based on keywords in ``description``."""
     desc = description.lower()
-    for name, cfg in SUBAGENTS.items():
+    for name, cfg in subagents.items():
         for kw in cfg.get("keywords", []):
             if kw in desc:
                 return name
     # fallback to first registered subagent
-    return next(iter(SUBAGENTS))
+    return next(iter(subagents))
 
 BASE_PROMPT = """
 You are DeepAgent, an autonomous coding assistant.  You have access to a
@@ -97,6 +100,9 @@ async def run_agent(
     on_tool_call: Callable[[str, Dict[str, Any]], tuple[bool, Dict[str, Any]]] | None = None,
     _state: Dict[str, Any] | None = None,
     _steps: int = 20,
+    base_prompt: str = BASE_PROMPT,
+    model: Any | None = None,
+    subagents: Dict[str, Dict[str, Any]] = SUBAGENTS,
 ) -> str:
     """Execute the DeepAgent loop and return the final response text.
 
@@ -137,39 +143,44 @@ async def run_agent(
 
     @tool
     def write_todos(items: List[str]) -> str:
+        """Record tasks in the shared todo list."""
         todos.extend(items)
         return f"Recorded {len(items)} todos"
 
     @tool
     def ls() -> List[str]:
+        """List available filenames in the virtual filesystem."""
         return list(files.keys())
 
     @tool
     def read_file(path: str) -> str:
+        """Read ``path`` from the virtual filesystem."""
         return files.get(path, "")
 
     @tool
     def write_file(path: str, content: str) -> str:
+        """Create or overwrite ``path`` with ``content``."""
         files[path] = content
         return "ok"
 
     @tool
     def edit_file(path: str, content: str) -> str:
+        """Replace the contents of ``path`` with ``content``."""
         files[path] = content
         return "ok"
 
     @tool
     def router(description: str) -> str:
         """Select the appropriate subagent name for ``description``."""
-        return _select_subagent(description)
+        return _select_subagent(description, subagents)
 
     @tool
     async def call_subagent(
         question: str, subagent: str | None = None, description: str = ""
     ) -> str:
         """Delegate ``question`` to a specialized subagent."""
-        name = subagent or _select_subagent(description or question)
-        config = SUBAGENTS.get(name, {})
+        name = subagent or _select_subagent(description or question, subagents)
+        config = subagents.get(name, {})
         instr = config if isinstance(config, str) else config.get("instructions", "")
         return await run_agent(
             question,
@@ -194,13 +205,13 @@ async def run_agent(
     all_tools: List[BaseTool] = builtin_tools + extra_tools
     tool_map = {t.name: t for t in all_tools}
 
-    model = get_default_model().bind_tools(all_tools)
+    bound_model = (model or get_default_model()).bind_tools(all_tools)
 
-    system = BASE_PROMPT + ("\n\n" + instructions if instructions else "")
+    system = base_prompt + ("\n\n" + instructions if instructions else "")
     messages: List[Any] = [SystemMessage(content=system), HumanMessage(content=question)]
 
     for _ in range(_steps):
-        ai: AIMessage = await model.ainvoke(messages)
+        ai: AIMessage = await bound_model.ainvoke(messages)
         messages.append(ai)
         if not ai.tool_calls:
             return ai.content or ""
@@ -237,4 +248,47 @@ async def run_agent(
             result = await tool_obj.ainvoke(call_args)
             messages.append(ToolMessage(content=str(result), tool_call_id=call["id"]))
     return "Agent stopped: maximum steps exceeded"
+
+
+def create_deep_agent(
+    *,
+    base_prompt: str = BASE_PROMPT,
+    model: Any | None = None,
+    subagents: Dict[str, Dict[str, Any]] | None = None,
+    tools: Sequence[BaseTool] | None = None,
+    mcp_endpoints: Sequence[str] | None = None,
+    step_limit: int = 20,
+) -> Callable[..., Any]:
+    """Factory returning a callable that executes :func:`run_agent`.
+
+    Parameters mirror those of :func:`run_agent` but are applied up-front so
+    callers need only provide the question (and optional instructions) each
+    time the returned callable is invoked.
+    """
+
+    subagent_cfg = subagents or SUBAGENTS
+
+    async def _agent(
+        question: str,
+        instructions: str = "",
+        *,
+        allow_tools: Iterable[str] | None = None,
+        on_tool_call: Callable[[str, Dict[str, Any]], tuple[bool, Dict[str, Any]]] | None = None,
+        _state: Dict[str, Any] | None = None,
+    ) -> str:
+        return await run_agent(
+            question,
+            instructions,
+            tools=tools,
+            mcp_endpoints=mcp_endpoints,
+            allow_tools=allow_tools,
+            on_tool_call=on_tool_call,
+            _state=_state,
+            _steps=step_limit,
+            base_prompt=base_prompt,
+            model=model,
+            subagents=subagent_cfg,
+        )
+
+    return _agent
 

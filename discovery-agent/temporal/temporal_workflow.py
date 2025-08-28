@@ -30,7 +30,7 @@ from typing import Sequence
 from langchain_core.tools import BaseTool
 from temporalio import activity, workflow
 
-from deep_agent import run_agent
+from deep_agent import create_deep_agent
 
 
 def _load_tool(spec: str) -> BaseTool:
@@ -55,12 +55,8 @@ async def run_query(
 ) -> str:
     """Execute the DeepAgent for the supplied question."""
     tool_objs = [_load_tool(t) for t in tools] if tools else None
-    return await run_agent(
-        question,
-        instructions,
-        tools=tool_objs,
-        mcp_endpoints=mcp_endpoints,
-    )
+    agent = create_deep_agent(tools=tool_objs, mcp_endpoints=mcp_endpoints)
+    return await agent(question, instructions)
 
 
 @workflow.defn

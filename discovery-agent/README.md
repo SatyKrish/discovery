@@ -16,3 +16,15 @@ result = await agent("2 + 2?")
 The returned callable mirrors `run_agent` but applies the configuration above on
 every invocation, letting callers focus on the question and optional
 instructions.
+
+## Command line chat
+
+For environments without a browser the repository provides a small CLI that
+talks to the FastAPI service exposing the Temporal workflow:
+
+```bash
+python cli_chat.py --api http://localhost:8000
+```
+
+The script starts a new workflow and allows chatting from the terminal. Use
+`Ctrl+C` to end the session.

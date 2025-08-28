@@ -1,21 +1,32 @@
 "use client";
 import React from "react";
-import { HttpProvider } from "@/lib/provider";
+import { FastApiProvider } from "@/lib/provider";
 import DiscoveryChat, { Chat } from "@/components/DiscoveryChat";
 import { Button } from "@/components/ui/button";
 import { Mic, AudioLines, Plus } from "lucide-react";
+import { useSession, signIn, signOut } from "next-auth/react";
 
 export default function HomePage() {
+  const { data: session } = useSession();
+  const isProd = process.env.NODE_ENV === "production";
   const [chats, setChats] = React.useState<Chat[] | null>(null);
   const [enteredChat, setEnteredChat] = React.useState(false);
 
   React.useEffect(() => {
     const ac = new AbortController();
-    HttpProvider.listChats(ac.signal).then(setChats).catch(() => setChats([]));
+    FastApiProvider.listChats(ac.signal).then(setChats).catch(() => setChats([]));
     return () => ac.abort();
   }, []);
 
   const showHero = (chats?.length === 0) && !enteredChat;
+
+  if (isProd && !session) {
+    return (
+      <main className="h-dvh flex items-center justify-center bg-background text-foreground">
+        <Button onClick={() => signIn("azure-ad")}>Sign in with Azure AD</Button>
+      </main>
+    );
+  }
 
   // After switching to chat view, ask the chat to create a new chat and focus the composer
   React.useEffect(() => {
@@ -32,10 +43,20 @@ export default function HomePage() {
 
   return (
     <main className="h-dvh bg-background text-foreground bg-chat-pattern">
+      {isProd && session && (
+        <Button
+          className="absolute top-4 right-4"
+          size="sm"
+          variant="outline"
+          onClick={() => signOut()}
+        >
+          Sign out
+        </Button>
+      )}
       {showHero ? (
         <div className="h-full w-full flex items-center justify-center">
           <div className="text-center px-6">
-            <h1 className="text-3xl sm:text-4xl font-semibold mb-8 text-foreground">Hey, Saty. Ready to dive in?</h1>
+            <h1 className="text-3xl sm:text-4xl font-semibold mb-8 text-foreground">Hey, {session?.user?.name || "there"}. Ready to dive in?</h1>
             <div className="mx-auto max-w-xl">
               <div className="flex items-center gap-3 rounded-full bg-muted/50 border px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-3 text-muted-foreground">
@@ -55,7 +76,7 @@ export default function HomePage() {
           </div>
         </div>
       ) : (
-        <DiscoveryChat provider={HttpProvider} />
+        <DiscoveryChat provider={FastApiProvider} />
       )}
     </main>
   );

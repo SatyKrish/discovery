@@ -107,7 +107,35 @@ async def test_continue_as_new(monkeypatch):
         await task
 
     kwargs = exc.value.kwargs_data
-    assert kwargs["conversation_history"][0]["user"] == "q1"
+    assert kwargs["conversation_history"] == [{"user": "q1"}, {"assistant": "resp:q1"}]
     assert kwargs["remaining_turns"] == 4
     assert kwargs["prompt_queue"] == ["q2"]
+
+
+@pytest.mark.asyncio
+async def test_activity_retry(monkeypatch):
+    attempts = {"n": 0}
+
+    async def flaky_run_query(question, instructions="", tools=None, mcp_endpoints=None):
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise RuntimeError("fail")
+        return f"resp:{question}", None
+
+    async def execute_with_retry(fn, *args, **kwargs):
+        while True:
+            try:
+                return await fn(*args)
+            except Exception:
+                if kwargs.get("_retry", 0) >= 1:
+                    raise
+                kwargs["_retry"] = kwargs.get("_retry", 0) + 1
+
+    monkeypatch.setattr(workflow_stub, "execute_activity", execute_with_retry)
+    monkeypatch.setattr(tw, "run_query", flaky_run_query)
+
+    wf = tw.DeepAgentWorkflow()
+    history = await wf.run("hi", remaining_turns=1, continue_after=10)
+    assert [m for d in history for m in d.values()] == ["hi", "resp:hi"]
+    assert attempts["n"] == 2
 

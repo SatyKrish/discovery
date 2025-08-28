@@ -1,0 +1,23 @@
+# Global ignores for Python/test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+*.log
+
+# Node/JS artifacts that may appear at root
+node_modules/
+
+# Editor/OS
+.vscode/
+.idea/
+.fleet/
+*.swp
+*.swo

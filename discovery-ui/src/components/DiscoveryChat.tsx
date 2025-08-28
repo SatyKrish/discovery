@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useVirtualizer, elementScroll } from "@tanstack/react-virtual";
+import { getFallbackVirtualItems } from "@/lib/virtual";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -486,7 +488,7 @@ function ChartArtifact({ artifact }: { artifact: Artifact }) {
 function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifactId: string) => void }) {
   const isUser = m.role === "user";
   return (
-    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}> 
+  <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")} data-testid="message-item"> 
       {!isUser && (
         <Avatar className="h-8 w-8 mt-1"><AvatarFallback>A</AvatarFallback></Avatar>
       )}
@@ -608,6 +610,43 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   const [artifactsOpen, setArtifactsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
+  // Virtualization state for the thread
+  const threadScrollRef = useRef<HTMLDivElement | null>(null);
+  const threadContainerRef = useRef<HTMLDivElement | null>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const rowVirtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => threadScrollRef.current,
+    estimateSize: () => 140,
+    overscan: 6,
+    getItemKey: (index) => messages[index]?.id ?? index,
+    scrollToFn: elementScroll,
+  });
+
+  // Keep autoscroll at bottom when new messages arrive unless user scrolled up
+  useEffect(() => {
+    if (!autoScroll) return;
+    const lastIndex = messages.length - 1;
+    if (lastIndex >= 0) {
+      // Defer to next frame to ensure measurements
+      requestAnimationFrame(() => rowVirtualizer.scrollToIndex(lastIndex, { align: "end" }));
+    }
+  }, [messages.length, autoScroll, rowVirtualizer]);
+
+  // Track whether user is near bottom
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const threshold = 24; // px from bottom to consider sticky
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+      setAutoScroll(atBottom);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll as EventListener);
+  }, []);
+
   // restore last selected chat id from localStorage
   useEffect(() => {
     try {
@@ -720,6 +759,8 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
         return provider.listMessages(selectedChatId).then((list) => setMessages(list));
       })
       .catch(() => { /* ignore demo errors */ });
+  // Ensure we stick to bottom on send
+  setAutoScroll(true);
   };
 
   const handlePickFiles = (files: FileList | null) => {
@@ -880,13 +921,42 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
             </div>
           </div>
 
-          {/* Thread */}
-          <ScrollArea className="flex-1 p-4">
-            <div className="mx-auto w-full max-w-[920px] space-y-6">
-              {messages.map((m) => (
-                <MessageBubble key={m.id} m={m} onTogglePin={handleTogglePin} />
-              ))}
-            </div>
+          {/* Thread (virtualized) */}
+          <ScrollArea className="flex-1 p-4" ref={threadScrollRef} data-testid="thread-scroll">
+            {/* When virtualization is active */}
+            {rowVirtualizer.getVirtualItems().length > 0 ? (
+              <div ref={threadContainerRef} className="mx-auto w-full max-w-[920px]" style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+                {(function() {
+                  // Cap extreme cases where the virtualizer may return an unexpectedly large set before measuring
+                  const items = rowVirtualizer.getVirtualItems();
+                  const bounded = items.length > 80 ? items.slice(0, 80) : items;
+                  return bounded;
+                })().map((item) => {
+                  const m = messages[item.index];
+                  if (!m) return null;
+                  return (
+                    <div
+                      key={item.key}
+                      data-index={item.index}
+                      ref={rowVirtualizer.measureElement}
+                      style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${item.start}px)` }}
+                    >
+                      <div className="pb-6">
+                        <MessageBubble m={m} onTogglePin={handleTogglePin} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              // Fallback: render last 20 messages without virtualization (e.g., tests)
+              <div className="mx-auto w-full max-w-[920px] space-y-6">
+                {getFallbackVirtualItems(messages.length, 20).map((fi) => {
+                  const m = messages[fi.index];
+                  return m ? <MessageBubble key={m.id} m={m} onTogglePin={handleTogglePin} /> : null;
+                })}
+              </div>
+            )}
           </ScrollArea>
 
           {/* Composer */}

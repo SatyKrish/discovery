@@ -36,9 +36,9 @@ Last updated: 2025-08-28
 - [x] E2E: navigate → filter → unpin reflects in chat
 
 ### 3) Virtualized thread
-- [ ] Integrate list virtualization (e.g., `@tanstack/react-virtual`)
-- [ ] Maintain autoscroll on new messages; preserve scroll on image/table loads
-- [ ] Tests: large thread smoke (performance sanity)
+- [x] Integrate list virtualization (`@tanstack/react-virtual`) with fallback in tests
+- [x] Maintain autoscroll to bottom on new messages; preserve position via element measurement
+- [x] Tests: large thread smoke (performance sanity)
 
 ### 4) Responsive/mobile polish
 - [ ] Collapsible sidebar UX on small screens (gesture, button)
@@ -70,6 +70,7 @@ Last updated: 2025-08-28
 
 - [x] Add npm script for E2E (e.g., `test:e2e`) with Playwright
 - [x] Playwright config: `webServer` (npm run build/start), multi-browser projects, trace/screenshot on failure
+- [x] CI: Python tests run from `discovery-agent` in GitHub Actions (fixed workflow working-directory)
 - [ ] Pre-commit: lint + typecheck (optional Husky hook)
 - [ ] Document environment: `BACKEND_BASE_URL` for API proxies in `.env.local`
 
@@ -95,6 +96,7 @@ Last updated: 2025-08-28
 | Date       | Summary                                                           | PR/Link |
 |------------|-------------------------------------------------------------------|---------|
 | 2025-08-28 | Collapsed sidebar polish, delete chat E2E, header title behavior  |         |
+| 2025-08-28 | Fixed CI for Python tests to use `discovery-agent` working dir    |         |
 
 ## Nice-to-haves / backlog
 

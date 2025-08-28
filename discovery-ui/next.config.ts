@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  turbopack: {
+    // Ensure Next.js uses the UI folder as the workspace root during tests/build
+    root: __dirname,
+  },
 };
 
 export default nextConfig;

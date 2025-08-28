@@ -42,3 +42,5 @@ next-env.d.ts
 
 # test
 /test-results
+/# Playwright HTML reports
+/playwright-report

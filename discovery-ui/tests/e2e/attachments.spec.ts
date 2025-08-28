@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+// Clear persisted chat selection to keep tests isolated
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try { localStorage.removeItem('discovery:lastChatId'); } catch {}
+  });
+});
+
 // E2E: attach -> send -> artifact visible
 // Stubs backend APIs via Next API proxy endpoints
 

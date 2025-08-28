@@ -16,6 +16,7 @@ sys.modules.pop("temporalio", None)
 # Provide a lightweight stub for openai_model to avoid heavy dependency in tests
 sys.modules.setdefault("openai_model", types.SimpleNamespace(get_default_model=lambda: None))
 
+temporalio = pytest.importorskip("temporalio")
 from temporalio.worker import Worker
 from temporalio.testing import WorkflowEnvironment
 from temporalio import workflow

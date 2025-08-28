@@ -19,13 +19,14 @@ Last updated: 2025-08-28
 ## Current focus (high ROI next)
 
 ### 1) Attachments — end-to-end
-- [ ] Composer: file picker (hidden input + Paperclip button)
-- [ ] Show selected attachments as removable chips (filename, size)
-- [ ] Upload route: Next.js API proxy (`/api/uploads`) → backend; handle progress/errors
-- [ ] Provider: include uploaded attachment references/URIs in `sendMessage`
-- [ ] Artifact render: display `type: "file"` with download and preview affordances
-- [ ] Error handling: surface upload/send failures with retry and removal options
-- [ ] Tests: unit (attachment state), E2E (attach → send → artifact visible)
+- [x] Composer: file picker (hidden input + Paperclip button)
+- [x] Show selected attachments as removable chips (filename, size)
+- [x] Upload route: Next.js API proxy (`/api/uploads`) → backend; handle progress/errors
+- [x] Provider: include uploaded attachment references/URIs in `sendMessage`
+- [x] Artifact render: display `type: "file"` with download and preview affordances
+- [x] Error handling: surface upload/send failures with retry and removal options
+- [x] Restrict uploads to docs/spreadsheets/code; block audio/video
+- [x] Tests: unit (attachment state), E2E (attach → send → artifact visible)
 
 ### 2) Library view (MVP)
 - [ ] Fetch pinned and recent artifacts (provider additions + API proxies)
@@ -54,7 +55,7 @@ Last updated: 2025-08-28
 
 - [ ] Unit: `normalizeTable` cases (array, columns+rows, object, primitive)
 - [ ] Unit: provider normalization for chats/messages
-- [ ] E2E: basic flow — start chat → send → artifact visible
+- [x] E2E: basic flow — start chat → send → artifact visible
 - [ ] E2E: sidebar collapsed/expanded behavior and shortcuts
 - [ ] A11y: ensure roles/labels for icon-only controls (Menu, Search, Theme)
 - [ ] A11y: keyboard navigation through sidebar and composer
@@ -67,8 +68,8 @@ Last updated: 2025-08-28
 
 ## Developer experience
 
-- [ ] Add npm script for E2E (e.g., `test:e2e`) with Playwright
-- [ ] Playwright config: `webServer` (npm run build/start), multi-browser projects, trace/screenshot on failure
+- [x] Add npm script for E2E (e.g., `test:e2e`) with Playwright
+- [x] Playwright config: `webServer` (npm run build/start), multi-browser projects, trace/screenshot on failure
 - [ ] Pre-commit: lint + typecheck (optional Husky hook)
 - [ ] Document environment: `BACKEND_BASE_URL` for API proxies in `.env.local`
 
@@ -76,7 +77,7 @@ Last updated: 2025-08-28
 
 - [ ] Provider: `togglePin` implementation when backend supports it
 - [ ] Provider: `createChat`/`deleteChat` error surfacing to UI
-- [ ] API: `/api/uploads` and any artifact retrieval proxies
+- [x] API: `/api/uploads` and any artifact retrieval proxies
 - [ ] Consistent shapes for chats/messages/artifacts (normalize at provider boundary)
 
 ## Conventions and locators (testing helpers)

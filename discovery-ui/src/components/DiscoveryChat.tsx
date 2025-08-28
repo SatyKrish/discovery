@@ -228,7 +228,13 @@ function ThemeToggleInline() {
     <TooltipProvider>
   <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="outline" size="icon" onClick={() => setDark(!dark)} aria-label={dark ? "Switch to light" : "Switch to dark"}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setDark(!dark)}
+            aria-label={dark ? "Switch to light" : "Switch to dark"}
+            className="transition-colors duration-300 motion-reduce:transition-none"
+          >
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
         </TooltipTrigger>

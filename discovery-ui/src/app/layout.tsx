@@ -13,7 +13,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className="transition-colors duration-300 motion-reduce:transition-none"
+    >
       <head>
         {/* Apply saved theme ASAP to avoid flash of incorrect theme */}
         <script
@@ -38,7 +42,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>
+      <body className="transition-colors duration-300 motion-reduce:transition-none">
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

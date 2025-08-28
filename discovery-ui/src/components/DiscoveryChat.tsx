@@ -161,37 +161,41 @@ function Sidebar({
         </div>
       )}
 
-      <ScrollArea className="flex-1">
-        <div className={cn("px-2 pb-2 space-y-1")}> 
-          {isLoading && Array.from({ length: 6 }).map((_, i) => (<div key={i} className="h-9 rounded-md bg-muted animate-pulse"/>))}
-          {/* no empty-state message for chats list */}
-          {!isLoading && filtered.map((c) => (
-            <div key={c.id} className={cn("w-full rounded-lg border px-2 py-2 text-left hover:bg-muted/50 transition flex items-center gap-2", selectedId === c.id ? "border-primary/40 bg-muted" : "border-border/60 bg-background") }>
-              <button onClick={() => onSelect(c.id)} className="flex-1 text-left min-w-0">
-                <div className="truncate text-sm text-foreground">{c.title}</div>
-                {c.lastActivity && <div className="text-[10px] text-muted-foreground mt-1">{c.lastActivity}</div>}
-              </button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete chat "${c.title}"?`)) onDelete(c.id);
-                    }}
-                    aria-label={`Delete chat ${c.title}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">Delete</TooltipContent>
-              </Tooltip>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+      {collapsed ? (
+        <div className="flex-1" />
+      ) : (
+        <ScrollArea className="flex-1">
+          <div className={cn("px-2 pb-2 space-y-1")}> 
+            {isLoading && Array.from({ length: 6 }).map((_, i) => (<div key={i} className="h-9 rounded-md bg-muted animate-pulse"/>))}
+            {/* no empty-state message for chats list */}
+            {!isLoading && filtered.map((c) => (
+              <div key={c.id} className={cn("w-full rounded-lg border px-2 py-2 text-left hover:bg-muted/50 transition flex items-center gap-2", selectedId === c.id ? "border-primary/40 bg-muted" : "border-border/60 bg-background") }>
+                <button onClick={() => onSelect(c.id)} className="flex-1 text-left min-w-0">
+                  <div className="truncate text-sm text-foreground">{c.title}</div>
+                  {c.lastActivity && <div className="text-[10px] text-muted-foreground mt-1">{c.lastActivity}</div>}
+                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete chat \"${c.title}\"?`)) onDelete(c.id);
+                      }}
+                      aria-label={`Delete chat ${c.title}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">Delete</TooltipContent>
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      )}
 
       <div className="border-t p-3 flex items-center justify-end">
         <ThemeToggleInline />

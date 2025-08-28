@@ -70,6 +70,7 @@ Last updated: 2025-08-28
 
 - [x] Add npm script for E2E (e.g., `test:e2e`) with Playwright
 - [x] Playwright config: `webServer` (npm run build/start), multi-browser projects, trace/screenshot on failure
+- [x] CI: Python tests run from `discovery-agent` in GitHub Actions (fixed workflow working-directory)
 - [ ] Pre-commit: lint + typecheck (optional Husky hook)
 - [ ] Document environment: `BACKEND_BASE_URL` for API proxies in `.env.local`
 
@@ -95,6 +96,7 @@ Last updated: 2025-08-28
 | Date       | Summary                                                           | PR/Link |
 |------------|-------------------------------------------------------------------|---------|
 | 2025-08-28 | Collapsed sidebar polish, delete chat E2E, header title behavior  |         |
+| 2025-08-28 | Fixed CI for Python tests to use `discovery-agent` working dir    |         |
 
 ## Nice-to-haves / backlog
 

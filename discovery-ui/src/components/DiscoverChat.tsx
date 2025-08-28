@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Send, Paperclip, Search, Plus, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown } from "lucide-react";
+import { Send, Paperclip, Search, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown, Pencil, Image as ImageIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -59,6 +59,15 @@ function Sidebar({
   setCollapsed: (b: boolean) => void;
   isLoading?: boolean;
 }) {
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const focusSearch = () => {
+    if (collapsed) {
+      setCollapsed(false);
+      setTimeout(() => searchInputRef.current?.focus(), 0);
+    } else {
+      searchInputRef.current?.focus();
+    }
+  };
   return (
     <div className={cn("h-full w-full flex flex-col border-r bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60")}> 
       <div className="px-3 py-2 flex items-center gap-2 h-14 border-b">
@@ -70,14 +79,44 @@ function Sidebar({
 
       <div className={cn("p-3", collapsed && "p-2")}> 
         {collapsed ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="icon" className="w-full" onClick={onNew} aria-label="New chat"><Plus className="h-4 w-4" /></Button>
-            </TooltipTrigger>
-            <TooltipContent>New chat</TooltipContent>
-          </Tooltip>
+          <div className="flex flex-col items-center gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant="secondary" className="h-9 w-9 rounded-full" onClick={onNew} aria-label="New chat" title="New chat">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">New chat</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant="secondary" className="h-9 w-9 rounded-full" onClick={focusSearch} aria-label="Search chats" title="Search chats">
+                  <Search className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Search chats</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant="secondary" className="h-9 w-9 rounded-full" onClick={() => { /* TODO: open library */ }} aria-label="Library" title="Library">
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Library</TooltipContent>
+            </Tooltip>
+          </div>
         ) : (
-          <Button className="w-full justify-center" onClick={onNew}><Plus className="h-4 w-4 mr-2" /> New chat</Button>
+          <div className="space-y-2">
+            <Button variant="ghost" className="w-full justify-start gap-2" onClick={onNew}>
+              <Pencil className="h-4 w-4" /> New chat
+            </Button>
+            <Button variant="ghost" className="w-full justify-start gap-2" onClick={focusSearch}>
+              <Search className="h-4 w-4" /> Search chats
+            </Button>
+            <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => { /* TODO: open library */ }}>
+              <ImageIcon className="h-4 w-4" /> Library
+            </Button>
+          </div>
         )}
       </div>
 
@@ -85,7 +124,7 @@ function Sidebar({
         <div className="px-3 pb-2">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search chats" className="pl-7 h-8" />
+            <Input ref={searchInputRef} placeholder="Search chats" className="pl-7 h-8" />
           </div>
         </div>
       )}
@@ -93,9 +132,7 @@ function Sidebar({
       <ScrollArea className="flex-1">
         <div className={cn("px-2 pb-2 space-y-1")}> 
           {isLoading && Array.from({ length: 6 }).map((_, i) => (<div key={i} className="h-9 rounded-md bg-muted animate-pulse"/>))}
-          {!isLoading && chats.length === 0 && (
-            <div className="text-xs text-muted-foreground p-4">No chats yet</div>
-          )}
+          {/* no empty-state message for chats list */}
           {!isLoading && chats.map((c) => (
             <button key={c.id} onClick={() => onSelect(c.id)} className={cn("w-full rounded-lg border px-3 py-2 text-left hover:bg-muted/50 transition", selectedId === c.id ? "border-primary/40 bg-muted" : "border-border/60 bg-background")}>
               <div className="truncate text-sm text-foreground">{c.title}</div>
@@ -420,9 +457,6 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           {/* Header */}
           <div className="h-14 border-b flex items-center justify-between px-4 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
             <div className="flex items-center gap-2 min-w-0">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-                <Menu className="h-4 w-4" />
-              </Button>
               <div className="text-base font-semibold truncate max-w-[60vw]">{selectedChat?.title ?? "New Chat"}</div>
             </div>
             <div className="flex items-center gap-2">

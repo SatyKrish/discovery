@@ -460,7 +460,19 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
               <div className="text-base font-semibold truncate max-w-[60vw]">{selectedChat?.title ?? "New Chat"}</div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setArtifactsOpen(!artifactsOpen)}>Artifacts</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setArtifactsOpen(!artifactsOpen)}
+                className="relative"
+              >
+                Artifacts
+                {allArtifacts.length > 0 && (
+                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary text-primary-foreground px-1 text-[10px] font-medium">
+                    {allArtifacts.length}
+                  </span>
+                )}
+              </Button>
               <Avatar><AvatarFallback>U</AvatarFallback></Avatar>
             </div>
           </div>

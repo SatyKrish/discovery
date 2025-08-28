@@ -16,7 +16,7 @@ corresponding instructions.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Sequence
 
 from langchain_core.messages import (
     AIMessage,
@@ -78,15 +78,22 @@ async def run_agent(
     instructions: str = "",
     tools: Sequence[BaseTool] | None = None,
     *,
+    allow_tools: Iterable[str] | None = None,
+    on_tool_call: Callable[[str, Dict[str, Any]], tuple[bool, Dict[str, Any]]] | None = None,
     _state: Dict[str, Any] | None = None,
     _steps: int = 20,
 ) -> str:
-    """Execute the DeepAgent loop and return the final response text."""
+    """Execute the DeepAgent loop and return the final response text.
+
+    Tool execution can be restricted via ``allow_tools`` and inspected or
+    modified with the ``on_tool_call`` callback.
+    """
 
     state = _state or {"files": {}, "todos": []}
     files: Dict[str, str] = state["files"]
     todos: List[str] = state["todos"]
     extra_tools = list(tools or [])
+    allowed_tool_set = set(allow_tools) if allow_tools is not None else None
 
     @tool
     def write_todos(items: List[str]) -> str:
@@ -128,6 +135,8 @@ async def run_agent(
             question,
             instr,
             extra_tools,
+            allow_tools=allow_tools,
+            on_tool_call=on_tool_call,
             _state=state,
             _steps=_steps,
         )
@@ -155,16 +164,36 @@ async def run_agent(
         if not ai.tool_calls:
             return ai.content or ""
         for call in ai.tool_calls:
-            tool_obj = tool_map.get(call["name"])
+            name = call["name"]
+            tool_obj = tool_map.get(name)
             if not tool_obj:
                 messages.append(
                     ToolMessage(
-                        content=f"Unknown tool {call['name']}",
+                        content=f"Unknown tool {name}",
                         tool_call_id=call["id"],
                     )
                 )
                 continue
-            result = await tool_obj.ainvoke(call.get("args", {}))
+            if allowed_tool_set is not None and name not in allowed_tool_set:
+                messages.append(
+                    ToolMessage(
+                        content=f"Tool {name} blocked",
+                        tool_call_id=call["id"],
+                    )
+                )
+                continue
+            call_args = call.get("args", {})
+            if on_tool_call:
+                allowed, call_args = on_tool_call(name, call_args)
+                if not allowed:
+                    messages.append(
+                        ToolMessage(
+                            content=f"Tool {name} denied",
+                            tool_call_id=call["id"],
+                        )
+                    )
+                    continue
+            result = await tool_obj.ainvoke(call_args)
             messages.append(ToolMessage(content=str(result), tool_call_id=call["id"]))
     return "Agent stopped: maximum steps exceeded"
 

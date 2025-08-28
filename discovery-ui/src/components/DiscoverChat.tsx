@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 // Removed table imports not used in the minimal prototype version
 import { Badge } from "@/components/ui/badge";
 import { Send, Paperclip, Search, Plus, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown } from "lucide-react";
@@ -148,9 +149,13 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
         </div>
       </CardHeader>
       <CardContent className="p-4 pt-0">
-        <div className="h-24 flex items-center justify-center bg-muted/30 rounded-md text-sm text-foreground">
-          <FileDown className="h-4 w-4 mr-2" /> {artifact.title}
-        </div>
+        {artifact.type === "table.json" ? (
+          <TableArtifact artifact={artifact} />
+        ) : (
+          <div className="h-24 flex items-center justify-center bg-muted/30 rounded-md text-sm text-foreground">
+            <FileDown className="h-4 w-4 mr-2" /> {artifact.title}
+          </div>
+        )}
       </CardContent>
       <CardFooter className="p-4 pt-0 flex gap-2">
         <Button size="sm" variant="outline">Expand</Button>
@@ -158,6 +163,108 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
       </CardFooter>
     </Card>
   );
+}
+
+function TableArtifact({ artifact }: { artifact: Artifact }) {
+  const [cols, setCols] = useState<string[]>([]);
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (artifact.type !== "table.json") return;
+      setLoading(true);
+      setError(null);
+      try {
+        let input: unknown = artifact.json;
+        if (!input && artifact.uri) {
+          const res = await fetch(artifact.uri, { cache: "no-store" });
+          if (!res.ok) throw new Error(`Failed to fetch table: ${res.status}`);
+          input = await res.json();
+        }
+        const norm = normalizeTable(input);
+        if (!cancelled) {
+          setCols(norm.columns);
+          setRows(norm.data);
+        }
+      } catch (e) {
+        if (!cancelled) setError("Failed to load table data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [artifact]);
+
+  if (loading) return <div className="h-24 rounded-md bg-muted animate-pulse" />;
+  if (error) return <div className="text-sm text-red-500">{error}</div>;
+  if (!cols.length || !rows.length) return <div className="text-sm text-muted-foreground">No rows</div>;
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <Table className="min-w-[480px]">
+        <TableHeader>
+          <TableRow>
+            {cols.map((c) => (
+              <TableHead key={c} className="whitespace-nowrap">{c}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => (
+            <TableRow key={i}>
+              {cols.map((c) => (
+                <TableCell key={c} className="align-top">
+                  {formatCell((r as Record<string, unknown>)[c])}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function normalizeTable(input: unknown): { columns: string[]; data: Record<string, unknown>[] } {
+  if (!input) return { columns: [], data: [] };
+  // Case 1: array of objects
+  if (Array.isArray(input)) {
+    const rows = input.filter((x) => x && typeof x === "object") as Record<string, unknown>[];
+    const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
+    return { columns, data: rows };
+  }
+  // Case 2: object with data array
+  if (typeof input === "object") {
+    const o = input as Record<string, unknown>;
+    if (Array.isArray(o.data)) return normalizeTable(o.data);
+    // Case 3: columns + rows (2D array)
+    if (Array.isArray(o.columns) && Array.isArray(o.rows)) {
+      const cols = (o.columns as unknown[]).map(String);
+      const data = (o.rows as unknown[]).map((row) => {
+        const arr = Array.isArray(row) ? row : [];
+        const obj: Record<string, unknown> = {};
+        cols.forEach((c, i) => { obj[c] = arr[i]; });
+        return obj;
+      });
+      return { columns: cols, data };
+    }
+    // Fallback: single object -> single row
+    return { columns: Object.keys(o), data: [o] };
+  }
+  // Primitive fallback
+  return { columns: ["value"], data: [{ value: input }] };
+}
+
+function formatCell(v: unknown) {
+  if (v == null) return <span className="text-muted-foreground">—</span>;
+  if (typeof v === "object") {
+    try { return <span className="text-xs text-muted-foreground break-words">{JSON.stringify(v)}</span>; } catch { /* noop */ }
+  }
+  return String(v);
 }
 
 /***********************************

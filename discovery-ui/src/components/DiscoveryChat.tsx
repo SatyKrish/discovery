@@ -641,7 +641,9 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           {/* Header */}
           <div className="h-14 border-b flex items-center justify-between px-4 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="text-base font-semibold truncate max-w-[60vw]">{selectedChat?.title ?? "New Chat"}</div>
+              {selectedChat?.title ? (
+                <div className="text-base font-semibold truncate max-w-[60vw]">{selectedChat.title}</div>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               <Button

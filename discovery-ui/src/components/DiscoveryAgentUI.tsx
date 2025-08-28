@@ -8,11 +8,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 // Removed table imports not used in the minimal prototype version
 import { Badge } from "@/components/ui/badge";
 import { Send, Paperclip, Search, Plus, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 /***********************************
  * Types
@@ -140,11 +141,11 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
           <CardTitle className="text-sm font-semibold truncate text-foreground">{artifact.title}</CardTitle>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><MoreVertical className="h-4 w-4" /></Button>
         </div>
-        <CardDescription className="text-xs">
+        <div className="text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="bg-muted text-foreground">{artifact.type}</Badge>
           </div>
-        </CardDescription>
+        </div>
       </CardHeader>
       <CardContent className="p-4 pt-0">
         <div className="h-24 flex items-center justify-center bg-muted/30 rounded-md text-sm text-foreground">
@@ -172,7 +173,7 @@ function MessageBubble({ m }: { m: Message }) {
       <div className="max-w-[720px] w-full">
         <div className={cn("rounded-2xl p-4 border", isUser ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground border-border/60")}> 
           <div className="prose dark:prose-invert max-w-none text-[15px] leading-7">
-            <ReactMarkdown>{m.text}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
           </div>
         </div>
         {m.artifacts?.length ? (
@@ -265,10 +266,16 @@ export default function DiscoveryAgentUI({ provider = NoopProvider }: { provider
     if (!composer.trim()) return;
     const now = new Date().toLocaleTimeString();
     const newMsg: Message = { id: String(Date.now()), role: "user", text: composer, createdAt: now };
-    setMessages((prev) => [...prev, newMsg, { id: String(Date.now()+1), role: "agent", text: "Hello! This is a response.", createdAt: now }]);
+    setMessages((prev) => [...prev, newMsg]);
     setComposer("");
     const ac = new AbortController();
-    provider.sendMessage({ chatId: selectedChatId || "demo", text: newMsg.text }, ac.signal).catch(()=>{});
+    provider
+      .sendMessage({ chatId: selectedChatId || "demo", text: newMsg.text }, ac.signal)
+      .then(() => {
+        if (!selectedChatId) return;
+        return provider.listMessages(selectedChatId).then((list) => setMessages(list));
+      })
+      .catch(() => { /* ignore demo errors */ });
   };
 
   const selectedChat = useMemo(() => chats.find((c) => c.id === selectedChatId), [chats, selectedChatId]);

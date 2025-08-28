@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Send, Paperclip, Search, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown, Pencil, Image as ImageIcon } from "lucide-react";
+import { Send, Paperclip, Search, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown, Pencil, Image as ImageIcon, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -33,6 +33,7 @@ export interface DiscoveryAgentDataProvider {
   sendMessage(params: { chatId: string; text: string }, signal?: AbortSignal): Promise<void>;
   togglePin?(params: { chatId: string; artifactId: string }, signal?: AbortSignal): Promise<void>;
   createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
+  deleteChat?(chatId: string, signal?: AbortSignal): Promise<void>;
 }
 
 export const NoopProvider: DiscoveryAgentDataProvider = {
@@ -49,6 +50,7 @@ function Sidebar({
   selectedId,
   onSelect,
   onNew,
+  onDelete,
   collapsed,
   setCollapsed,
   isLoading,
@@ -57,6 +59,7 @@ function Sidebar({
   selectedId?: string;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onDelete: (id: string) => void;
   collapsed: boolean;
   setCollapsed: (b: boolean) => void;
   isLoading?: boolean;
@@ -163,10 +166,29 @@ function Sidebar({
           {isLoading && Array.from({ length: 6 }).map((_, i) => (<div key={i} className="h-9 rounded-md bg-muted animate-pulse"/>))}
           {/* no empty-state message for chats list */}
           {!isLoading && filtered.map((c) => (
-            <button key={c.id} onClick={() => onSelect(c.id)} className={cn("w-full rounded-lg border px-3 py-2 text-left hover:bg-muted/50 transition", selectedId === c.id ? "border-primary/40 bg-muted" : "border-border/60 bg-background")}>
-              <div className="truncate text-sm text-foreground">{c.title}</div>
-              {c.lastActivity && <div className="text-[10px] text-muted-foreground mt-1">{c.lastActivity}</div>}
-            </button>
+            <div key={c.id} className={cn("w-full rounded-lg border px-2 py-2 text-left hover:bg-muted/50 transition flex items-center gap-2", selectedId === c.id ? "border-primary/40 bg-muted" : "border-border/60 bg-background") }>
+              <button onClick={() => onSelect(c.id)} className="flex-1 text-left min-w-0">
+                <div className="truncate text-sm text-foreground">{c.title}</div>
+                {c.lastActivity && <div className="text-[10px] text-muted-foreground mt-1">{c.lastActivity}</div>}
+              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete chat "${c.title}"?`)) onDelete(c.id);
+                    }}
+                    aria-label={`Delete chat ${c.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">Delete</TooltipContent>
+              </Tooltip>
+            </div>
           ))}
           {!isLoading && filtered.length === 0 && (
             <div className="text-xs text-muted-foreground px-3 py-2">No chats match “{query}”.</div>
@@ -577,6 +599,20 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
     }
   };
 
+  const handleDeleteChat = (id: string) => {
+    setChats((prev) => prev.filter((c) => c.id !== id));
+    if (selectedChatId === id) {
+      // pick next available chat
+      const next = chats.find((c) => c.id !== id)?.id;
+      setSelectedChatId(next);
+      if (!next) setMessages([]);
+    }
+    if (provider.deleteChat) {
+      const ac = new AbortController();
+      provider.deleteChat(id, ac.signal).catch(() => { /* ignore */ });
+    }
+  };
+
   return (
     <TooltipProvider>
       <div
@@ -592,6 +628,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
             selectedId={selectedChatId}
             onSelect={setSelectedChatId}
             onNew={handleNewChat}
+            onDelete={handleDeleteChat}
             collapsed={collapsed}
             setCollapsed={setCollapsed}
             isLoading={loadingChats}

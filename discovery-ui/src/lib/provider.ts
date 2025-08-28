@@ -9,6 +9,7 @@ export interface DiscoveryAgentDataProvider {
   sendMessage(params: { chatId: string; text: string }, signal?: AbortSignal): Promise<void>;
   togglePin?(params: { chatId: string; artifactId: string }, signal?: AbortSignal): Promise<void>;
   createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
+  deleteChat?(chatId: string, signal?: AbortSignal): Promise<void>;
 }
 
 export const HttpProvider: DiscoveryAgentDataProvider = {
@@ -69,6 +70,15 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
     } catch (e: any) {
       if (e?.name === "AbortError") return null;
       return null;
+    }
+  }
+  ,
+  async deleteChat(chatId, signal) {
+    try {
+      await fetch(`/api/chats/${encodeURIComponent(chatId)}`, { method: "DELETE", signal });
+    } catch (e: any) {
+      // ignore abort/network errors for demo
+      return;
     }
   }
 };

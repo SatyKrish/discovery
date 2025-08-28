@@ -8,10 +8,24 @@ decide when to invoke tools and stops when the model returns a final message
 with no tool calls.
 
 Subagents are configured via a registry mapping names to instruction strings
-and optional metadata.  The ``router`` tool selects a subagent based on a
-natural-language description.  ``call_subagent`` accepts either an explicit
-subagent name or a description and dispatches to :func:`run_agent` with the
-corresponding instructions.
+and optional metadata::
+
+    SUBAGENTS = {
+        "code": {
+            "instructions": "You are a coding specialist…",
+            "keywords": ["code", "bug"],
+        },
+        "docs": {
+            "instructions": "You write and update documentation…",
+            "keywords": ["doc", "write"],
+        },
+    }
+
+The :func:`router` tool chooses a subagent given a natural-language
+description by matching these keyword lists.  ``call_subagent`` accepts either
+an explicit subagent name or falls back to the ``router`` when ``subagent`` is
+``None``, dispatching to :func:`run_agent` with the selected subagent's
+instructions.
 
 External MCP servers or direct :class:`~langchain_core.tools.BaseTool` instances
 can augment the agent.  Any provided tools are merged with the built-ins before
@@ -210,7 +224,11 @@ async def run_agent(
         question: str, subagent: str | None = None, description: str = ""
     ) -> str:
         """Delegate ``question`` to a specialized subagent."""
-        name = subagent or _select_subagent(description or question, subagents)
+        name = (
+            subagent
+            if subagent and subagent in subagents
+            else _select_subagent(description or question, subagents)
+        )
         config = subagents.get(name, {})
         instr = config if isinstance(config, str) else config.get("instructions", "")
         result = await run_agent(

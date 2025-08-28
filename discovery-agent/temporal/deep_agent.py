@@ -13,19 +13,12 @@ natural-language description.  ``call_subagent`` accepts either an explicit
 subagent name or a description and dispatches to :func:`run_agent` with the
 corresponding instructions.
 
-Custom LangChain tools or external MCP servers can augment the agent.  Any
-tools discovered from MCP endpoints are merged with the built-ins before the
-model is bound::
-
-    from langchain_core.tools import tool
-
-    @tool
-    def add(x: int, y: int) -> int:
-        return x + y
+Tools from external MCP servers can augment the agent.  Any tools discovered
+from the configured endpoints are merged with the built-ins before the model is
+bound::
 
     await run_agent(
         "2 + 2?",
-        tools=[add],
         mcp_endpoints=["http://localhost:8000/mcp"],
     )
 """
@@ -94,7 +87,6 @@ work is complete, respond with the final answer.
 async def run_agent(
     question: str,
     instructions: str = "",
-    tools: Sequence[BaseTool] | None = None,
     mcp_endpoints: Sequence[str] | None = None,
     *,
     allow_tools: Iterable[str] | None = None,
@@ -104,9 +96,8 @@ async def run_agent(
 ) -> str:
     """Execute the DeepAgent loop and return the final response text.
 
-    Additional LangChain ``tools`` or MCP server URLs can be supplied to extend
-    the agent's capabilities.  Any tools discovered from ``mcp_endpoints`` are
-    merged with the built-ins before the model is bound.  Tool execution can be
+    Additional tools from ``mcp_endpoints`` are discovered and merged with the
+    agent's built-ins before the model is bound.  Tool execution can be
     restricted via ``allow_tools`` and inspected or modified with the
     ``on_tool_call`` callback.
     """
@@ -114,7 +105,7 @@ async def run_agent(
     state = _state or {"files": {}, "todos": []}
     files: Dict[str, str] = state["files"]
     todos: List[str] = state["todos"]
-    extra_tools: List[BaseTool] = list(tools or [])
+    extra_tools: List[BaseTool] = []
     if mcp_endpoints:
         for endpoint in mcp_endpoints:
             async with streamablehttp_client(endpoint) as (read, write, _):
@@ -179,7 +170,7 @@ async def run_agent(
         return await run_agent(
             question,
             instr,
-            extra_tools,
+            mcp_endpoints=mcp_endpoints,
             allow_tools=allow_tools,
             on_tool_call=on_tool_call,
             _state=state,

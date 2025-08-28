@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { HttpProvider } from "@/lib/provider";
+import { FastApiProvider } from "@/lib/provider";
 import DiscoveryChat, { Chat } from "@/components/DiscoveryChat";
 import { Button } from "@/components/ui/button";
 import { Mic, AudioLines, Plus } from "lucide-react";
@@ -11,7 +11,7 @@ export default function HomePage() {
 
   React.useEffect(() => {
     const ac = new AbortController();
-    HttpProvider.listChats(ac.signal).then(setChats).catch(() => setChats([]));
+    FastApiProvider.listChats(ac.signal).then(setChats).catch(() => setChats([]));
     return () => ac.abort();
   }, []);
 
@@ -55,7 +55,7 @@ export default function HomePage() {
           </div>
         </div>
       ) : (
-        <DiscoveryChat provider={HttpProvider} />
+        <DiscoveryChat provider={FastApiProvider} />
       )}
     </main>
   );

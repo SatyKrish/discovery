@@ -144,6 +144,78 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
   }
 };
 
+// ---------------------------------------------------------------------------
+// FastAPI-backed provider
+// ---------------------------------------------------------------------------
+
+const FASTAPI_BASE = process.env.NEXT_PUBLIC_AGENT_API || "http://localhost:8000";
+
+const fastApiChats: Chat[] = [];
+
+export const FastApiProvider: DiscoveryAgentDataProvider = {
+  async listChats(_signal?: AbortSignal) {
+    return fastApiChats;
+  },
+  async createChat(params, _signal?: AbortSignal) {
+    try {
+      const res = await fetch(`${FASTAPI_BASE}/workflow/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: params?.title ?? undefined }),
+      });
+      if (!res.ok) return null;
+      const data: any = await res.json().catch(() => ({} as any));
+      const id = typeof data?.workflow_id === "string" ? data.workflow_id : undefined;
+      if (!id) return null;
+      const chat: Chat = { id, title: params?.title || `Chat ${id}` };
+      fastApiChats.push(chat);
+      return chat;
+    } catch {
+      return null;
+    }
+  },
+  async listMessages(chatId, _signal?: AbortSignal) {
+    try {
+      const res = await fetch(`${FASTAPI_BASE}/workflow/${encodeURIComponent(chatId)}/history`);
+      if (!res.ok) return [];
+      const data: any = await res.json().catch(() => ({} as any));
+      const history = Array.isArray(data?.history) ? (data.history as any[]) : [];
+      const messages: Message[] = [];
+      history.forEach((h: any, i: number) => {
+        const [[role, text]] = Object.entries(h);
+        if (typeof text === "string") {
+          messages.push({ id: `${i}`, role: role === "user" ? "user" : "agent", text, createdAt: new Date().toISOString() });
+        }
+      });
+      return messages;
+    } catch {
+      return [];
+    }
+  },
+  async sendMessage(body, _signal?: AbortSignal) {
+    try {
+      await fetch(`${FASTAPI_BASE}/workflow/${encodeURIComponent(body.chatId)}/prompt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: body.text }),
+      });
+    } catch {
+      return;
+    }
+  },
+  async deleteChat(chatId, _signal?: AbortSignal) {
+    try {
+      await fetch(`${FASTAPI_BASE}/workflow/${encodeURIComponent(chatId)}/end`, { method: "POST" });
+    } catch {
+    }
+    const idx = fastApiChats.findIndex((c) => c.id === chatId);
+    if (idx >= 0) fastApiChats.splice(idx, 1);
+  },
+  async listArtifacts(_params, _signal?: AbortSignal) {
+    return [];
+  },
+};
+
 type Dict = Record<string, unknown>;
 
 function isRecord(x: unknown): x is Dict {

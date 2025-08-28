@@ -6,3 +6,4 @@ langchain-openai
 python-dotenv
 temporalio>=1.4.0
 mcp>=1.13.1
+fastapi

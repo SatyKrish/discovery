@@ -88,17 +88,26 @@ async def test_continue_as_new(monkeypatch):
     def fake_continue_as_new(*args, **kwargs):  # pragma: no cover - exercised
         raise ContinueSentinel(args, kwargs)
 
+    proceed = asyncio.Event()
+
     async def fake_run_query(question, instructions="", tools=None, mcp_endpoints=None):
+        await proceed.wait()
         return f"resp:{question}", None
 
     monkeypatch.setattr(workflow_stub, "continue_as_new", fake_continue_as_new)
     monkeypatch.setattr(tw, "run_query", fake_run_query)
 
     wf = tw.DeepAgentWorkflow()
+    task = asyncio.create_task(wf.run("q1", remaining_turns=5, continue_after=1))
+    await asyncio.sleep(0)  # allow run to start and block in fake_run_query
+    wf.user_prompt("q2")
+    proceed.set()
 
     with pytest.raises(ContinueSentinel) as exc:
-        await wf.run("q1", remaining_turns=5, continue_after=1)
+        await task
 
-    assert exc.value.kwargs_data["conversation_history"][0]["user"] == "q1"
-    assert exc.value.kwargs_data["remaining_turns"] == 4
+    kwargs = exc.value.kwargs_data
+    assert kwargs["conversation_history"][0]["user"] == "q1"
+    assert kwargs["remaining_turns"] == 4
+    assert kwargs["prompt_queue"] == ["q2"]
 

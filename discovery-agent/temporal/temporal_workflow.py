@@ -127,10 +127,11 @@ class DeepAgentWorkflow:
         conversation_history: List[Dict[str, str]] | None = None,
         remaining_turns: int = 20,
         continue_after: int = 50,
+        prompt_queue: List[str] | None = None,
     ) -> List[Dict[str, str]]:  # pragma: no cover - workflow entrypoint
         """Run the chat loop until exhausted or ``end_chat`` is signalled."""
 
-        self.prompt_queue = []
+        self.prompt_queue = list(prompt_queue or [])
         if question:
             self.prompt_queue.append(question)
         self.conversation_history = conversation_history or []
@@ -178,6 +179,7 @@ class DeepAgentWorkflow:
                     conversation_history=self.conversation_history,
                     remaining_turns=remaining_turns,
                     continue_after=continue_after,
+                    prompt_queue=list(self.prompt_queue),
                 )
 
         return self.conversation_history

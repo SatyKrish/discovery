@@ -69,7 +69,7 @@ temporal_stub.activity = types.SimpleNamespace(defn=lambda f: f)
 temporal_stub.workflow = types.SimpleNamespace(defn=lambda f: f, run=lambda f: f)
 sys.modules["temporalio"] = temporal_stub
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent.parent / "temporal"))
 from deep_agent import create_deep_agent, run_agent
 import temporal_workflow
 

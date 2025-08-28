@@ -3,7 +3,7 @@ from pathlib import Path
 from dataclasses import asdict
 
 # Make registry modules importable
-sys.path.append(str(Path(__file__).resolve().parents[1] / "discovery-agent/temporal"))
+sys.path.append(str(Path(__file__).resolve().parents[1] / "temporal"))
 
 import registries
 import tool_registry

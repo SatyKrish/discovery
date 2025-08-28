@@ -108,14 +108,6 @@ function Sidebar({
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant="secondary" className="h-9 w-9 rounded-full" onClick={focusSearch} aria-label="Search chats" title="Search chats">
-                  <Search className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Search chats</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
                 <Link
                   href="/library"
                   aria-label="Library"
@@ -129,6 +121,14 @@ function Sidebar({
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right">Library</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant="secondary" className="h-9 w-9 rounded-full" onClick={focusSearch} aria-label="Search chats" title="Search chats">
+                  <Search className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Search chats</TooltipContent>
             </Tooltip>
           </div>
         ) : (

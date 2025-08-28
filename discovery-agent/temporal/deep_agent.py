@@ -6,6 +6,12 @@ filesystem and todo list, exposes those via built-in tools, and can
 recursively delegate work through a ``call_subagent`` tool.  The agent uses
 OpenAI's tool-calling to decide when to invoke tools and stops when the model
 returns a final message with no tool calls.
+
+Subagents are configured via a registry mapping names to instruction strings
+and optional metadata.  The ``router`` tool selects a subagent based on a
+natural-language description.  ``call_subagent`` accepts either an explicit
+subagent name or a description and dispatches to :func:`run_agent` with the
+corresponding instructions.
 """
 
 from __future__ import annotations
@@ -22,6 +28,32 @@ from langchain_core.tools import BaseTool, tool
 
 from openai_model import get_default_model
 
+# -------------------------------
+# Subagent registry
+# -------------------------------
+
+SUBAGENTS: Dict[str, Dict[str, Any]] = {
+    "code": {
+        "instructions": "You are a coding specialist. Focus on writing and modifying code.",
+        "keywords": ["code", "bug", "implement", "function", "module"],
+    },
+    "docs": {
+        "instructions": "You write and update documentation and explanatory text.",
+        "keywords": ["doc", "document", "explain", "write", "docs"],
+    },
+}
+
+
+def _select_subagent(description: str) -> str:
+    """Heuristically choose a subagent based on keywords in ``description``."""
+    desc = description.lower()
+    for name, cfg in SUBAGENTS.items():
+        for kw in cfg.get("keywords", []):
+            if kw in desc:
+                return name
+    # fallback to first registered subagent
+    return next(iter(SUBAGENTS))
+
 BASE_PROMPT = """
 You are DeepAgent, an autonomous coding assistant.  You have access to a
 virtual in-memory filesystem and a todo list.  Use these tools to plan and
@@ -32,8 +64,9 @@ edit files:
 - read_file(path: str) -> read a file from the virtual filesystem
 - write_file(path: str, content: str) -> create or overwrite a file
 - edit_file(path: str, content: str) -> replace a file's contents
-- call_subagent(question: str, instructions: str = "") -> delegate a subtask
-  to another agent that shares the same state
+- router(description: str) -> choose a subagent name for a task
+- call_subagent(question: str, subagent: str | None = None, description: str = "")
+  -> delegate a subtask to another agent that shares the same state
 
 Plan your work with ``write_todos`` and update files as needed.  When the
 work is complete, respond with the final answer.
@@ -79,10 +112,21 @@ async def run_agent(
         return "ok"
 
     @tool
-    async def call_subagent(question: str, instructions: str = "") -> str:
+    def router(description: str) -> str:
+        """Select the appropriate subagent name for ``description``."""
+        return _select_subagent(description)
+
+    @tool
+    async def call_subagent(
+        question: str, subagent: str | None = None, description: str = ""
+    ) -> str:
+        """Delegate ``question`` to a specialized subagent."""
+        name = subagent or _select_subagent(description or question)
+        config = SUBAGENTS.get(name, {})
+        instr = config if isinstance(config, str) else config.get("instructions", "")
         return await run_agent(
             question,
-            instructions,
+            instr,
             extra_tools,
             _state=state,
             _steps=_steps,
@@ -94,6 +138,7 @@ async def run_agent(
         read_file,
         write_file,
         edit_file,
+        router,
         call_subagent,
     ]
     all_tools: List[BaseTool] = builtin_tools + extra_tools

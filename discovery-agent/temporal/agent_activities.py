@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import json
 import os
 from typing import Any, Dict
+import logging
 
 from temporalio import activity
 
@@ -57,9 +58,18 @@ class AgentActivities:
             args: Arguments to pass to the tool handler.
         """
 
+        logger = logging.getLogger(__name__)
+        logger.info("activity.dispatch_tool.start", extra={"tool": name, "arg_keys": list(args.keys())})
         for definition, handler in TOOL_REGISTRY.items():
             if definition.name == name:
-                return handler(**args)
+                try:
+                    result = handler(**args)
+                    logger.info("activity.dispatch_tool.completed", extra={"tool": name})
+                    return result
+                except Exception:
+                    logger.exception("activity.dispatch_tool.error", extra={"tool": name})
+                    raise
+        logger.error("activity.dispatch_tool.unknown_tool", extra={"tool": name})
         raise KeyError(f"Unknown tool: {name}")
 
     @activity.defn
@@ -70,7 +80,8 @@ class AgentActivities:
         fields.  The named tool is executed and its return value provided
         verbatim.
         """
-
+        logger = logging.getLogger(__name__)
+        logger.info("activity.agent_toolPlanner.start", extra={"prompt_len": len(prompt or "")})
         data = self._parse_json(prompt)
         tool_name = data.get("tool")
         if not tool_name:
@@ -78,7 +89,9 @@ class AgentActivities:
         args = data.get("args", {})
         if not isinstance(args, dict):
             raise ValueError("'args' must be an object")
-        return self._dispatch_tool(tool_name, args)
+        result = self._dispatch_tool(tool_name, args)
+        logger.info("activity.agent_toolPlanner.completed", extra={"tool": tool_name})
+        return result
 
     @activity.defn
     async def agent_validatePrompt(self, prompt: str) -> Dict[str, Any]:
@@ -87,17 +100,21 @@ class AgentActivities:
         Validation ensures that the required ``tool`` key exists and that
         ``args`` is a JSON object if supplied.
         """
-
+        logger = logging.getLogger(__name__)
+        logger.info("activity.agent_validatePrompt.start", extra={"prompt_len": len(prompt or "")})
         data = self._parse_json(prompt)
         if "tool" not in data:
             raise ValueError("Missing 'tool' field")
         if "args" in data and not isinstance(data["args"], dict):
             raise ValueError("'args' must be an object")
+        logger.info("activity.agent_validatePrompt.completed", extra={"has_args": "args" in data})
         return data
 
     @activity.defn
     async def get_wf_env_vars(self) -> Dict[str, str]:
         """Return relevant environment variables for the workflow."""
-
+        logger = logging.getLogger(__name__)
         keys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]
+        redacted = {key: bool(os.environ.get(key)) for key in keys}
+        logger.info("activity.get_wf_env_vars", extra={"keys_present": redacted})
         return {key: os.environ.get(key, "") for key in keys}

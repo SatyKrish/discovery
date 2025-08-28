@@ -213,7 +213,7 @@ async def run_agent(
         name = subagent or _select_subagent(description or question, subagents)
         config = subagents.get(name, {})
         instr = config if isinstance(config, str) else config.get("instructions", "")
-        return await run_agent(
+        result = await run_agent(
             question,
             instr,
             tools=tools,
@@ -226,6 +226,9 @@ async def run_agent(
             model=model,
             subagents=subagents,
         )
+        parent_system = base_prompt + ("\n\n" + instructions if instructions else "")
+        messages.append(SystemMessage(content=parent_system))
+        return result
 
     builtin_tools: List[BaseTool] = [
         write_todos,
@@ -242,8 +245,7 @@ async def run_agent(
     bound_model = (model or get_default_model()).bind_tools(all_tools)
 
     system = base_prompt + ("\n\n" + instructions if instructions else "")
-    if not messages:
-        messages.append(SystemMessage(content=system))
+    messages.append(SystemMessage(content=system))
     messages.append(HumanMessage(content=question))
 
     while state["remaining_steps"] > 0:

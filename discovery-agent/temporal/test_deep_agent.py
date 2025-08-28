@@ -1,7 +1,7 @@
 import sys
 import types
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from pathlib import Path
 
 
@@ -196,4 +196,49 @@ async def test_run_agent_tracks_state():
     assert isinstance(state["messages"][2], AIMessage)
     assert state["remaining_steps"] == 2
     assert state["response"] == {"content": "done"}
+
+
+class InstructionTrackingModel:
+    """Model that records messages across calls and triggers a subagent."""
+
+    def __init__(self) -> None:
+        self.calls = []
+        self.step = 0
+
+    def bind_tools(self, tools):
+        self.tools = tools
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls.append(list(messages))
+        self.step += 1
+        if self.step == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "1",
+                        "name": "call_subagent",
+                        "args": {"question": "inner", "subagent": "code"},
+                    }
+                ],
+            )
+        elif self.step == 2:
+            return AIMessage(content="inner done")
+        return AIMessage(content="outer done")
+
+
+@pytest.mark.asyncio
+async def test_subagent_instructions_preserved():
+    model = InstructionTrackingModel()
+    result = await run_agent(
+        "outer task", instructions="parent", model=model, _state={}, _steps=5
+    )
+    assert result == "outer done"
+    sub_call_msgs = model.calls[1]
+    assert isinstance(sub_call_msgs[-2], SystemMessage)
+    assert "coding specialist" in sub_call_msgs[-2].content
+    outer_call_msgs = model.calls[2]
+    assert isinstance(outer_call_msgs[-2], SystemMessage)
+    assert "parent" in outer_call_msgs[-2].content
 

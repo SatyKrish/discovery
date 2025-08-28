@@ -18,15 +18,7 @@ export default function HomePage() {
     return () => ac.abort();
   }, []);
 
-  const showHero = (chats?.length === 0) && !enteredChat;
-
-  if (isProd && !session) {
-    return (
-      <main className="h-dvh flex items-center justify-center bg-background text-foreground">
-        <Button onClick={() => signIn("azure-ad")}>Sign in with Azure AD</Button>
-      </main>
-    );
-  }
+  const showHero = chats?.length === 0 && !enteredChat;
 
   // After switching to chat view, ask the chat to create a new chat and focus the composer
   React.useEffect(() => {
@@ -39,7 +31,16 @@ export default function HomePage() {
       }, 150);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [showHero, enteredChat]);
+
+  if (isProd && !session) {
+    return (
+      <main className="h-dvh flex items-center justify-center bg-background text-foreground">
+        <Button onClick={() => signIn("azure-ad")}>Sign in with Azure AD</Button>
+      </main>
+    );
+  }
 
   return (
     <main className="h-dvh bg-background text-foreground bg-chat-pattern">

@@ -11,9 +11,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const url = new URL(req.url);
-  const body = await req.json().catch(() => ({} as any));
-  const chatId = typeof body?.chatId === "string" ? body.chatId : url.searchParams.get("chatId");
-  const text = typeof body?.text === "string" ? body.text : undefined;
+  const body = (await req.json().catch(() => ({}))) as { chatId?: unknown; text?: unknown };
+  const chatId = typeof body.chatId === "string" ? body.chatId : url.searchParams.get("chatId");
+  const text = typeof body.text === "string" ? body.text : undefined;
   if (!chatId || !text) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   const res = await fetch(`${url.origin}/api/workflow/${encodeURIComponent(chatId)}/prompt`, {
     method: "POST",

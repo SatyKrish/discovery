@@ -48,11 +48,10 @@ This service uses Temporal for orchestration. You need a Temporal server running
 - Copy `.env.example` to `.env` and edit as needed. Key vars:
 	- `TEMPORAL_ADDRESS` (default `localhost:7233`)
 	- `TEMPORAL_TASK_QUEUE` (default `deep-agent-task-queue`)
-	- `OPENAI_API_KEY` (optional, required if your tools use OpenAI)
-	- Azure OpenAI (optional): set `AZURE_OPENAI_ENDPOINT` to switch to Azure
-	  - Required: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`
+	- Azure OpenAI (required):
+	  - `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`
 	  - Optional: `AZURE_OPENAI_API_KEY` (if not using AAD), `AZURE_OPENAI_API_VERSION`
-	  - When Azure vars are set, the app uses AzureChatOpenAI under the hood
+	  - The app uses AzureChatOpenAI
 
 3) Install deps and run services (in discovery-agent/):
 

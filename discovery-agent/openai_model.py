@@ -1,38 +1,32 @@
 import os
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, AzureChatOpenAI
+from langchain_openai import AzureChatOpenAI
 
 load_dotenv()
 
 
 def get_default_model():
-    """Return an OpenAI-compatible chat model.
+        """Return an Azure OpenAI chat model (AzureChatOpenAI only).
 
-    If ``AZURE_OPENAI_ENDPOINT`` is set, use Azure OpenAI via ``AzureChatOpenAI``.
-    Otherwise, default to ``ChatOpenAI`` with ``OPENAI_MODEL``/``OPENAI_API_KEY``.
-    """
+        Requires:
+            - AZURE_OPENAI_ENDPOINT
+            - AZURE_OPENAI_DEPLOYMENT
+        Optional:
+            - AZURE_OPENAI_API_KEY (if not using AAD)
+            - AZURE_OPENAI_API_VERSION (default 2024-05-01-preview)
+        """
 
-    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    if azure_endpoint:
-        # Azure OpenAI configuration
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-        if not deployment:
-            raise ValueError(
-                "AZURE_OPENAI_ENDPOINT is set, but AZURE_OPENAI_DEPLOYMENT is missing."
-            )
+        if not endpoint or not deployment:
+                raise ValueError(
+                        "Azure OpenAI required: set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT"
+                )
         api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview")
-        # API key is optional if using keyless/AAD, but supported if provided
-        # AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT are read from env by the SDK
         return AzureChatOpenAI(
-            azure_deployment=deployment,
-            api_version=api_version,
-            # 'model' is used for tracing/token counting only in Azure context
-            model=os.getenv("OPENAI_MODEL", None),
+                azure_deployment=deployment,
+                api_version=api_version,
         )
-
-    # Fallback: public OpenAI
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    return ChatOpenAI(model=model, api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # Convenient module-level instance

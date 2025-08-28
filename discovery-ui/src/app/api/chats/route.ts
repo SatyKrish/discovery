@@ -1,24 +1,22 @@
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
-  const base = process.env.BACKEND_BASE_URL;
-  if (!base) return NextResponse.json({ error: "BACKEND_BASE_URL not set" }, { status: 500 });
-
-  const url = new URL(req.url);
-  // Forward to backend without the /api prefix: /api/chats -> {base}/chats
-  const dest = `${base}${url.pathname.replace(/^\/api/, "")}${url.search}`;
-  const res = await fetch(dest, { method: "GET" });
-  const data = await res.json().catch(() => ({}));
-  return NextResponse.json(data, { status: res.status });
+  // No direct backend list endpoint; return empty list by default.
+  return NextResponse.json({ chats: [] }, { status: 200 });
 }
 
 export async function POST(req: Request) {
-  const base = process.env.BACKEND_BASE_URL;
-  if (!base) return NextResponse.json({ error: "BACKEND_BASE_URL not set" }, { status: 500 });
-  const url = new URL(req.url);
-  const dest = `${base}${url.pathname.replace(/^\/api/, "")}${url.search}`;
-  const body = await req.json().catch(() => ({}));
-  const res = await fetch(dest, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const data = await res.json().catch(() => ({}));
-  return NextResponse.json(data, { status: res.status });
+  // Adapt to workflow start and normalize to a chat shape
+  const origin = new URL(req.url).origin;
+  const body = await req.json().catch(() => ({} as any));
+  const question = typeof body?.title === "string" && body.title.trim() ? body.title : undefined;
+  const res = await fetch(`${origin}/api/workflow/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  const data = await res.json().catch(() => ({} as any));
+  const id = typeof data?.workflow_id === "string" ? data.workflow_id : undefined;
+  if (!id) return NextResponse.json({ error: "Failed to create chat" }, { status: 500 });
+  return NextResponse.json({ id, title: question || `Chat ${id}` }, { status: 200 });
 }

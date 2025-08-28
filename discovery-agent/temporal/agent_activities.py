@@ -98,6 +98,10 @@ class AgentActivities:
     @activity.defn
     async def get_wf_env_vars(self) -> Dict[str, str]:
         """Return relevant environment variables for the workflow."""
-
-        keys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]
+        keys = [
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_DEPLOYMENT",
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_API_VERSION",
+        ]
         return {key: os.environ.get(key, "") for key in keys}

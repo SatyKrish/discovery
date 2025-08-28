@@ -63,10 +63,10 @@ async def main() -> None:
     temporal_address = os.getenv("TEMPORAL_ADDRESS", "localhost:7233")
     task_queue = os.getenv("TEMPORAL_TASK_QUEUE", "deep-agent-task-queue")
 
-    # Access LLM settings so they are loaded from the environment.  The
-    # ``openai_model`` module reads these values when imported by activities.
-    os.getenv("OPENAI_API_KEY", "")
-    os.getenv("OPENAI_MODEL", "")
+    # Access LLM settings so they are loaded from the environment.
+    os.getenv("AZURE_OPENAI_ENDPOINT", "")
+    os.getenv("AZURE_OPENAI_DEPLOYMENT", "")
+    os.getenv("AZURE_OPENAI_API_KEY", "")
 
     client = await Client.connect(temporal_address)
 

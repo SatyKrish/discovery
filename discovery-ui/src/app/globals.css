@@ -38,6 +38,14 @@
 
   /* Custom token used for the background decorative pattern */
   --pattern-color: rgba(24,24,27,0.04);
+
+  /* Chat message tokens */
+  --message-user-from: hsl(var(--color-primary));
+  --message-user-to: hsl(var(--color-primary) / 0.9);
+  --message-agent-from: hsl(var(--color-muted));
+  --message-agent-to: hsl(var(--color-card));
+  --message-sent: hsl(var(--color-muted-foreground));
+  --message-read: hsl(var(--color-primary));
 }
 
 /* DARK overrides via class or data attribute on <html> */
@@ -70,6 +78,13 @@
   --color-ring: 240 4.9% 83.9%;
 
   --pattern-color: rgba(244,244,245,0.04);
+
+  --message-user-from: hsl(var(--color-primary));
+  --message-user-to: hsl(var(--color-primary) / 0.9);
+  --message-agent-from: hsl(var(--color-muted));
+  --message-agent-to: hsl(var(--color-card));
+  --message-sent: hsl(var(--color-muted-foreground));
+  --message-read: hsl(var(--color-primary));
 }
 
 body {

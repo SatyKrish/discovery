@@ -29,7 +29,9 @@ import {
   Trash2,
   Check,
   CheckCheck,
+  Loader2,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -518,9 +520,12 @@ function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifact
   const isUser = m.role === "user";
   const status = m.state ?? "sent";
   return (
-    <div
+    <motion.div
       className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}
       data-testid="message-item"
+      initial={isUser ? { opacity: 0, y: 8 } : undefined}
+      animate={isUser ? { opacity: 1, y: 0 } : undefined}
+      transition={{ duration: 0.2 }}
     >
       {!isUser && (
         <Avatar className="h-8 w-8 mt-1">
@@ -528,7 +533,7 @@ function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifact
           <AvatarFallback>AG</AvatarFallback>
         </Avatar>
       )}
-      <div className={cn("max-w-[720px] w-full flex flex-col", isUser && "items-end")}> 
+      <div className={cn("max-w-[720px] w-full flex flex-col", isUser && "items-end")}>
         <div
           className={cn(
             "relative rounded-2xl p-4 border before:absolute before:content-[''] before:-bottom-1 before:h-3 before:w-3 before:bg-inherit before:rotate-45",
@@ -570,6 +575,39 @@ function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifact
           <AvatarFallback>U</AvatarFallback>
         </Avatar>
       )}
+    </motion.div>
+  );
+}
+
+/***********************************
+ * Typing indicator
+ ***********************************/
+function TypingIndicator({ active }: { active: boolean }) {
+  const [visible, setVisible] = React.useState(active);
+  useEffect(() => {
+    if (active) setVisible(true);
+    else {
+      const t = setTimeout(() => setVisible(false), 200);
+      return () => clearTimeout(t);
+    }
+  }, [active]);
+  if (!visible) return null;
+  return (
+    <div
+      className={cn(
+        "mx-auto w-full max-w-[920px] pb-6 transition-opacity duration-200",
+        active ? "opacity-100" : "opacity-0"
+      )}
+    >
+      <div className="flex gap-3">
+        <Avatar className="h-8 w-8 mt-1">
+          <AvatarImage src="https://avatar.vercel.sh/agent" alt="Agent" />
+          <AvatarFallback>AG</AvatarFallback>
+        </Avatar>
+        <div className="rounded-2xl p-4 border bg-gradient-to-br from-[var(--message-agent-from)] to-[var(--message-agent-to)] text-card-foreground border-border/60">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -604,6 +642,7 @@ function Composer({ value, onChange, onSend, textareaRef, onPickFiles, picked, o
             }}
             className="min-h-[72px] resize-none border-0 focus-visible:ring-0"
           />
+          <div className="px-3 pt-1 text-[11px] text-muted-foreground text-right">Shift+Enter for newline</div>
           {picked.length > 0 && (
             <div className="px-3 pb-2 flex flex-wrap gap-2">
               {picked.map((f) => (
@@ -670,6 +709,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   const [artifactsOpen, setArtifactsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [agentTyping, setAgentTyping] = useState(false);
 
   // Virtualization state for the thread
   const threadScrollRef = useRef<HTMLDivElement | null>(null);
@@ -693,6 +733,12 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
       requestAnimationFrame(() => rowVirtualizer.scrollToIndex(lastIndex, { align: "end" }));
     }
   }, [messages.length, autoScroll, rowVirtualizer]);
+
+  useEffect(() => {
+    if (agentTyping && autoScroll) {
+      requestAnimationFrame(() => threadScrollRef.current?.scrollTo({ top: threadScrollRef.current.scrollHeight }));
+    }
+  }, [agentTyping, autoScroll]);
 
   // Track whether user is near bottom
   useEffect(() => {
@@ -812,6 +858,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
     setPicked([]);
     setUploaded([]);
     setUploadError(null);
+    setAgentTyping(true);
     const ac = new AbortController();
     provider
       .sendMessage({ chatId: selectedChatId || "demo", text: newMsg.text, attachments: uploaded }, ac.signal)
@@ -819,7 +866,8 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
         if (!selectedChatId) return;
         return provider.listMessages(selectedChatId).then((list) => setMessages(list));
       })
-      .catch(() => { /* ignore demo errors */ });
+      .catch(() => { /* ignore demo errors */ })
+      .finally(() => setAgentTyping(false));
   // Ensure we stick to bottom on send
   setAutoScroll(true);
   };
@@ -1061,6 +1109,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
                 })}
               </div>
             )}
+            <TypingIndicator active={agentTyping} />
           </ScrollArea>
 
           {/* Composer */}

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useVirtualizer, elementScroll } from "@tanstack/react-virtual";
 import { getFallbackVirtualItems } from "@/lib/virtual";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -615,6 +616,7 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   const [loadingChats, setLoadingChats] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Virtualization state for the thread
   const threadScrollRef = useRef<HTMLDivElement | null>(null);
@@ -881,13 +883,14 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   return (
     <TooltipProvider>
       <div
-        className="h-screen w-full grid bg-background text-foreground"
+        className="h-screen w-full grid bg-background text-foreground grid-cols-1 lg:[grid-template-columns:var(--sidebar)_1fr_var(--artifacts)]"
         style={{
-          gridTemplateColumns: `${collapsed ? "64px" : "260px"} 1fr ${artifactsOpen ? "420px" : "0px"}`,
-        }}
+          "--sidebar": collapsed ? "64px" : "260px",
+          "--artifacts": artifactsOpen ? "420px" : "0px",
+        } as React.CSSProperties}
       >
         {/* LEFT COLUMN: sidebar */}
-        <div className="min-w-0">
+        <div className="min-w-0 hidden lg:block">
           <Sidebar
             chats={chats}
             selectedId={selectedChatId}
@@ -905,24 +908,63 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
           {/* Header */}
           <div className="h-14 border-b flex items-center justify-between px-4 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
             <div className="flex items-center gap-2 min-w-0">
+              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden"
+                    aria-label="Open sidebar"
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="p-0 w-[260px] lg:hidden">
+                  <Sidebar
+                    chats={chats}
+                    selectedId={selectedChatId}
+                    onSelect={(id) => { setSelectedChatId(id); setSidebarOpen(false); }}
+                    onNew={handleNewChat}
+                    onDelete={handleDeleteChat}
+                    collapsed={false}
+                    setCollapsed={() => setSidebarOpen(false)}
+                    isLoading={loadingChats}
+                  />
+                </SheetContent>
+              </Sheet>
               {selectedChat?.title ? (
                 <div className="text-base font-semibold truncate max-w-[60vw]">{selectedChat.title}</div>
               ) : null}
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setArtifactsOpen(!artifactsOpen)}
-                className="relative"
-              >
-                Artifacts
-                {allArtifacts.length > 0 && (
-                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary text-primary-foreground px-1 text-[10px] font-medium">
-                    {allArtifacts.length}
-                  </span>
-                )}
-              </Button>
+              <Sheet open={artifactsOpen} onOpenChange={setArtifactsOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="relative"
+                  >
+                    Artifacts
+                    {allArtifacts.length > 0 && (
+                      <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary text-primary-foreground px-1 text-[10px] font-medium">
+                        {allArtifacts.length}
+                      </span>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="p-0 w-[420px] lg:hidden">
+                  <div className="h-14 border-b flex items-center px-4 font-semibold">Artifacts</div>
+                  <ScrollArea className="h-[calc(100vh-3.5rem)] p-3">
+                    <div className="grid grid-cols-1 gap-3">
+                      {allArtifacts.length ? (
+                        allArtifacts.map((a) => <ArtifactPreview key={a.id} artifact={a} onTogglePin={handleTogglePin} />)
+                      ) : (
+                        <div className="text-sm text-muted-foreground p-6 text-center">No artifacts yet</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </SheetContent>
+              </Sheet>
               <Avatar><AvatarFallback>U</AvatarFallback></Avatar>
             </div>
           </div>
@@ -981,7 +1023,10 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
         </div>
 
         {/* RIGHT COLUMN: artifacts inline */}
-        <div className="border-l overflow-hidden transition-[width] duration-200 ease-out">
+        <div
+          className="border-l overflow-hidden transition-[width] duration-200 ease-out hidden lg:block"
+          style={{ width: artifactsOpen ? "420px" : "0px" }}
+        >
           <div className="h-14 border-b flex items-center px-4 font-semibold">Artifacts</div>
           <ScrollArea className="h-[calc(100vh-3.5rem)] p-3">
             <div className="grid grid-cols-1 gap-3">

@@ -5,7 +5,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useVirtualizer, elementScroll } from "@tanstack/react-virtual";
@@ -14,7 +14,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Send, Paperclip, Search, MoreVertical, Pin as PinIcon, Menu, Sun, Moon, FileDown, Pencil, Image as ImageIcon, Trash2 } from "lucide-react";
+import {
+  Send,
+  Paperclip,
+  Search,
+  MoreVertical,
+  Pin as PinIcon,
+  Menu,
+  Sun,
+  Moon,
+  FileDown,
+  Pencil,
+  Image as ImageIcon,
+  Trash2,
+  Check,
+  CheckCheck,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
@@ -37,7 +52,14 @@ import {
  ***********************************/
 export type Role = "user" | "agent" | "tool";
 export type Artifact = { id: string; type: "chart.vegaLite" | "chart.recharts" | "table.json" | "file"; title: string; uri?: string; json?: unknown; pinned?: boolean };
-export type Message = { id: string; role: Role; text: string; createdAt: string; artifacts?: Artifact[] };
+export type Message = {
+  id: string;
+  role: Role;
+  text: string;
+  createdAt: string;
+  state?: "sent" | "read";
+  artifacts?: Artifact[];
+};
 export type Chat = { id: string; title: string; lastActivity?: string };
 
 /***********************************
@@ -494,13 +516,27 @@ function ChartArtifact({ artifact }: { artifact: Artifact }) {
  ***********************************/
 function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifactId: string) => void }) {
   const isUser = m.role === "user";
+  const status = m.state ?? "sent";
   return (
-  <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")} data-testid="message-item"> 
+    <div
+      className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}
+      data-testid="message-item"
+    >
       {!isUser && (
-        <Avatar className="h-8 w-8 mt-1"><AvatarFallback>A</AvatarFallback></Avatar>
+        <Avatar className="h-8 w-8 mt-1">
+          <AvatarImage src="https://avatar.vercel.sh/agent" alt="Agent" />
+          <AvatarFallback>AG</AvatarFallback>
+        </Avatar>
       )}
-      <div className="max-w-[720px] w-full">
-        <div className={cn("rounded-2xl p-4 border", isUser ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground border-border/60")}> 
+      <div className={cn("max-w-[720px] w-full flex flex-col", isUser && "items-end")}> 
+        <div
+          className={cn(
+            "relative rounded-2xl p-4 border before:absolute before:content-[''] before:-bottom-1 before:h-3 before:w-3 before:bg-inherit before:rotate-45",
+            isUser
+              ? "bg-gradient-to-br from-[var(--message-user-from)] to-[var(--message-user-to)] text-primary-foreground before:right-3"
+              : "bg-gradient-to-br from-[var(--message-agent-from)] to-[var(--message-agent-to)] text-card-foreground border-border/60 before:left-3",
+          )}
+        >
           <div className="prose dark:prose-invert max-w-none text-[15px] leading-7">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
           </div>
@@ -512,10 +548,27 @@ function MessageBubble({ m, onTogglePin }: { m: Message; onTogglePin?: (artifact
             ))}
           </div>
         ) : null}
-        <div className="text-[11px] text-muted-foreground mt-2">{m.createdAt}</div>
+        <div
+          className={cn(
+            "text-[11px] text-muted-foreground mt-2 flex items-center gap-1",
+            isUser && "justify-end",
+          )}
+        >
+          {m.createdAt}
+          {isUser && (
+            status === "read" ? (
+              <CheckCheck className="h-3 w-3 text-[var(--message-read)]" />
+            ) : (
+              <Check className="h-3 w-3 text-[var(--message-sent)]" />
+            )
+          )}
+        </div>
       </div>
       {isUser && (
-        <Avatar className="h-8 w-8 mt-1"><AvatarFallback>U</AvatarFallback></Avatar>
+        <Avatar className="h-8 w-8 mt-1">
+          <AvatarImage src="https://avatar.vercel.sh/user" alt="User" />
+          <AvatarFallback>U</AvatarFallback>
+        </Avatar>
       )}
     </div>
   );
@@ -965,7 +1018,10 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
                   </ScrollArea>
                 </SheetContent>
               </Sheet>
-              <Avatar><AvatarFallback>U</AvatarFallback></Avatar>
+              <Avatar>
+                <AvatarImage src="https://avatar.vercel.sh/user" alt="User" />
+                <AvatarFallback>U</AvatarFallback>
+              </Avatar>
             </div>
           </div>
 

@@ -9,7 +9,7 @@ describe('normalizeUploadItem', () => {
   });
 
   it('falls back across alternative keys', () => {
-    const input = { uuid: 'u1', filename: 'file.pdf', path: '/f.pdf' } as any;
+    const input: Record<string, unknown> = { uuid: 'u1', filename: 'file.pdf', path: '/f.pdf' };
     const out = normalizeUploadItem(input)!;
     expect(out.id).toBeDefined();
     expect(out.title).toBe('file.pdf');

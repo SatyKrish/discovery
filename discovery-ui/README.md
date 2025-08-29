@@ -1,4 +1,4 @@
-This UI uses Next.js and integrates Azure AD single sign-on via [NextAuth](https://next-auth.js.org/).
+This UI uses Next.js and integrates Azure AD single sign-on via [NextAuth](https://next-auth.js.org/). The interface defaults to the Inter typeface and smoothly fades between light and dark themes (respecting `prefers-reduced-motion`).
 
 ## Getting Started
 
@@ -26,6 +26,11 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to access the chat interface.
+
+## Styling
+
+- Uses the [Inter](https://fonts.google.com/specimen/Inter) font with a `system-ui` fallback.
+- Light/dark theme toggles fade using `transition-colors` and honor the user's `prefers-reduced-motion` setting.
 
 ## Learn More
 

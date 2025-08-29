@@ -70,7 +70,7 @@ async def run_query(
     )
     latest_tool: Dict[str, Any] | None = None
 
-    async def _on_tool_call(name: str, data: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+    def _on_tool_call(name: str, data: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
         nonlocal latest_tool
         latest_tool = {"name": name, "args": data}
         # Disallow execution; the workflow will confirm separately.
@@ -86,9 +86,8 @@ async def run_query(
         agent = create_deep_agent(
             tools=tool_objs,
             mcp_endpoints=mcp_endpoints,
-            on_tool_call=_on_tool_call,
         )
-        response = await agent(question, instructions)
+        response = await agent(question, instructions, on_tool_call=_on_tool_call)
         _alog.info(
             "activity.run_query.completed",
             extra={"tool_requested": bool(latest_tool)},
@@ -97,12 +96,6 @@ async def run_query(
     except Exception:
         _alog.exception("activity.run_query.error")
         raise
-    agent = create_deep_agent(
-        tools=tool_objs,
-        mcp_endpoints=mcp_endpoints,
-    )
-    response = await agent(question, instructions, on_tool_call=_on_tool_call)
-    return response, latest_tool
 
 
 @workflow.defn

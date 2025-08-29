@@ -1,13 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 
-async function stubBasicChat(page: any) {
-  await page.route('**/api/chats', async (route: any) => {
+async function stubBasicChat(page: Page) {
+  await page.route('**/api/chats', async (route: Route) => {
     if (route.request().method() === 'GET') {
       return route.fulfill({ status: 200, body: JSON.stringify({ chats: [{ id: 'c1', title: 'Demo chat' }] }), contentType: 'application/json' });
     }
     return route.continue();
   });
-  await page.route('**/api/messages*', async (route: any) => {
+  await page.route('**/api/messages*', async (route: Route) => {
     if (route.request().method() === 'GET') {
       return route.fulfill({ status: 200, body: JSON.stringify({ messages: [] }), contentType: 'application/json' });
     }

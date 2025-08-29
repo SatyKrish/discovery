@@ -9,7 +9,14 @@ export type Artifact = {
   pinned?: boolean;
   chatId?: string;
 };
-export type Message = { id: string; role: Role; text: string; createdAt: string; artifacts?: Artifact[] };
+export type Message = {
+  id: string;
+  role: Role;
+  text: string;
+  createdAt: string;
+  state?: "sent" | "read";
+  artifacts?: Artifact[];
+};
 export type Chat = { id: string; title: string; lastActivity?: string };
 
 export interface DiscoveryAgentDataProvider {
@@ -275,8 +282,10 @@ function normalizeMessage(x: unknown): Message | null {
   const text = (x as Dict)["text"] ?? (x as Dict)["content"] ?? "";
   const createdAt = (x as Dict)["createdAt"] ?? (x as Dict)["created_at"] ?? new Date().toISOString();
   const artifacts = Array.isArray((x as Dict)["artifacts"]) ? ((x as Dict)["artifacts"] as Artifact[]) : undefined;
+  const stateRaw = (x as Dict)["state"] ?? (x as Dict)["status"];
+  const state = stateRaw === "read" || stateRaw === "sent" ? (stateRaw as "read" | "sent") : undefined;
   if (!text) return null;
-  return { id: String(id), role, text: String(text), createdAt: String(createdAt), artifacts };
+  return { id: String(id), role, text: String(text), createdAt: String(createdAt), state, artifacts };
 }
 
 function normalizeArtifact(x: unknown): Artifact | null {

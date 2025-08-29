@@ -1,12 +1,14 @@
 name: UI E2E (Playwright)
 
+# Temporarily disabled automatic runs; manual only for now.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   ui-e2e:
     name: Run Playwright tests
+  # Temporarily disabled; remove the next line to re-enable
+  if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:

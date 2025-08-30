@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""
+MCP Configuration Loader
+Loads MCP server configurations from mcp-config.json
+"""
+
+import json
+import os
+from typing import Dict, List, Any, Optional
+from pathlib import Path
+
+class MCPConfigLoader:
+    """Loads and manages MCP server configurations"""
+
+    def __init__(self, config_path: Optional[str] = None):
+        if config_path is None:
+            # Default to mcp-config.json in the project root
+            self.config_path = Path(__file__).parent.parent / "mcp-config.json"
+        else:
+            self.config_path = Path(config_path)
+
+        self.config = {}
+        self._load_config()
+
+    def _load_config(self):
+        """Load configuration from file"""
+        if not self.config_path.exists():
+            print(f"Warning: MCP config file not found at {self.config_path}")
+            self.config = {"mcpServers": {}}
+            return
+
+        try:
+            with open(self.config_path, 'r') as f:
+                self.config = json.load(f)
+
+            # Validate basic structure
+            if "mcpServers" not in self.config:
+                print("Warning: 'mcpServers' key not found in config, creating empty config")
+                self.config["mcpServers"] = {}
+
+        except json.JSONDecodeError as e:
+            print(f"Error parsing MCP config file: {e}")
+            self.config = {"mcpServers": {}}
+        except Exception as e:
+            print(f"Error loading MCP config file: {e}")
+            self.config = {"mcpServers": {}}
+
+    def get_servers(self) -> Dict[str, Dict[str, Any]]:
+        """Get all MCP server configurations"""
+        return self.config.get("mcpServers", {})
+
+    def get_server_config(self, server_name: str) -> Optional[Dict[str, Any]]:
+        """Get configuration for a specific server"""
+        servers = self.get_servers()
+        return servers.get(server_name)
+
+    def get_all_server_configs(self) -> List[Dict[str, Any]]:
+        """Get all server configurations as a list"""
+        servers = self.get_servers()
+        configs = []
+
+        for server_name, server_config in servers.items():
+            # Add server name to config
+            config_copy = server_config.copy()
+            config_copy["name"] = server_name
+            configs.append(config_copy)
+
+        return configs
+
+    def _expand_env_vars(self, value: Any) -> Any:
+        """Recursively expand environment variables in configuration values"""
+        if isinstance(value, str):
+            # Handle ${VAR} and ${VAR:-default} syntax
+            import re
+
+            def replace_var(match):
+                var_expr = match.group(1)
+                if ':-' in var_expr:
+                    var_name, default_value = var_expr.split(':-', 1)
+                    return os.environ.get(var_name, default_value)
+                else:
+                    return os.environ.get(var_expr, "")
+
+            return re.sub(r'\$\{([^}]+)\}', replace_var, value)
+
+        elif isinstance(value, dict):
+            return {k: self._expand_env_vars(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [self._expand_env_vars(item) for item in value]
+        else:
+            return value
+
+    def get_expanded_server_config(self, server_name: str) -> Optional[Dict[str, Any]]:
+        """Get server config with environment variables expanded"""
+        config = self.get_server_config(server_name)
+        if config:
+            return self._expand_env_vars(config)
+        return None
+
+    def get_all_expanded_configs(self) -> List[Dict[str, Any]]:
+        """Get all server configs with environment variables expanded"""
+        configs = self.get_all_server_configs()
+        return [self._expand_env_vars(config) for config in configs]
+
+    def reload_config(self):
+        """Reload configuration from file"""
+        self._load_config()
+
+    def validate_config(self) -> List[str]:
+        """Validate the configuration and return any issues"""
+        issues = []
+
+        servers = self.get_servers()
+
+        for server_name, server_config in servers.items():
+            # Check required fields based on type
+            server_type = server_config.get("type", "streamable-http")
+
+            if server_type == "stdio":
+                required_fields = ["command", "args"]
+                for field in required_fields:
+                    if field not in server_config:
+                        issues.append(f"Server '{server_name}': missing required field '{field}' for stdio type")
+
+                # Validate command exists
+                command = server_config.get("command")
+                if command:
+                    # For now, just check if it's a string (could be extended to check if executable exists)
+                    if not isinstance(command, str):
+                        issues.append(f"Server '{server_name}': command must be a string")
+
+            elif server_type == "streamable-http":
+                if "url" not in server_config:
+                    issues.append(f"Server '{server_name}': missing required field 'url' for streamable-http type")
+
+        return issues
+
+
+# Global instance
+config_loader = MCPConfigLoader()
+
+
+def load_mcp_servers_into_orchestrator():
+    """Load all MCP servers from config into the global orchestrator"""
+    try:
+        from .mcp_client import tool_orchestrator
+
+        # Clear existing servers
+        tool_orchestrator.mcp_manager.servers.clear()
+
+        # Load servers from config
+        configs = config_loader.get_all_expanded_configs()
+
+        for config in configs:
+            server_name = config["name"]
+            tool_orchestrator.add_mcp_server(server_name, config)
+            print(f"Loaded MCP server: {server_name} ({config.get('type', 'streamable-http')})")
+    except ImportError:
+        # Skip loading if running as standalone script
+        pass
+
+
+# Auto-load servers when module is imported (but not when run as script)
+if __name__ != "__main__":
+    load_mcp_servers_into_orchestrator()

@@ -2,6 +2,9 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import os
+import subprocess
+import signal
 from typing import Dict, List, Any, Optional
 import httpx
 from src.models import MCPServer, ToolOrchestrator, ToolSpec
@@ -75,16 +78,220 @@ class MCPClient:
             raise Exception(f"Failed to execute tool {tool_name}: {str(e)}")
 
 
+class StdioMCPClient:
+    """Client for stdio-based MCP servers"""
+
+    def __init__(self, server_config: Dict[str, Any]):
+        self.name = server_config.get("name", "unknown")
+        self.command = server_config.get("command", "")
+        self.args = server_config.get("args", [])
+        self.env = server_config.get("env", {})
+        self.timeout = server_config.get("timeout", 30.0)
+        self._process: Optional[subprocess.Popen] = None
+        self._running = False
+
+    async def __aenter__(self):
+        await self.start_server()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.stop_server()
+
+    async def start_server(self):
+        """Start the stdio MCP server process"""
+        if self._running:
+            return
+
+        try:
+            # Prepare environment variables
+            env = os.environ.copy()
+            env.update(self.env)
+
+            # Start the process
+            self._process = subprocess.Popen(
+                [self.command] + self.args,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                text=True,
+                bufsize=1
+            )
+
+            self._running = True
+            # Give the server a moment to start
+            await asyncio.sleep(0.1)
+
+        except Exception as e:
+            raise Exception(f"Failed to start MCP server {self.name}: {str(e)}")
+
+    async def stop_server(self):
+        """Stop the stdio MCP server process"""
+        if self._process and self._running:
+            try:
+                self._process.terminate()
+                try:
+                    self._process.wait(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+                    self._process.wait()
+            except Exception:
+                pass  # Best effort cleanup
+            finally:
+                self._running = False
+                self._process = None
+
+    async def connect(self) -> bool:
+        """Test connection to stdio MCP server"""
+        return self._running and self._process and self._process.poll() is None
+
+    async def discover_tools(self) -> List[Dict[str, Any]]:
+        """Discover available tools from stdio MCP server"""
+        if not self._running or not self._process:
+            return []
+
+        try:
+            # For now, return mock tools based on server name
+            # In a real implementation, this would communicate with the MCP server
+            # to discover available tools via the MCP protocol
+            if self.name == "echo":
+                return [
+                    {
+                        "name": "echo",
+                        "description": "Echo back the provided text",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string", "description": "Text to echo back"}
+                            },
+                            "required": ["text"]
+                        }
+                    },
+                    {
+                        "name": "reverse_echo",
+                        "description": "Echo back the provided text in reverse",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string", "description": "Text to reverse and echo back"}
+                            },
+                            "required": ["text"]
+                        }
+                    }
+                ]
+            elif self.name == "calculator":
+                return [
+                    {
+                        "name": "calculate",
+                        "description": "Calculate mathematical expressions safely",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "expression": {"type": "string", "description": "Mathematical expression to evaluate"}
+                            },
+                            "required": ["expression"]
+                        }
+                    },
+                    {
+                        "name": "add",
+                        "description": "Add two numbers",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "a": {"type": "number", "description": "First number"},
+                                "b": {"type": "number", "description": "Second number"}
+                            },
+                            "required": ["a", "b"]
+                        }
+                    }
+                ]
+            elif self.name == "web-search":
+                return [
+                    {
+                        "name": "web_search",
+                        "description": "Search the web for information",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string", "description": "Search query"},
+                                "max_results": {"type": "integer", "description": "Maximum number of results", "default": 5}
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                ]
+            return []
+        except Exception:
+            return []
+
+    async def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a tool on the stdio MCP server"""
+        if not self._running or not self._process:
+            raise Exception("MCP server not running")
+
+        try:
+            # For now, simulate tool execution based on server name and tool name
+            # In a real implementation, this would communicate with the MCP server
+            # via stdin/stdout using the MCP protocol
+
+            if self.name == "echo":
+                if tool_name == "echo":
+                    text = args.get("text", "")
+                    return {"result": f"Echo: {text}"}
+                elif tool_name == "reverse_echo":
+                    text = args.get("text", "")
+                    return {"result": f"Reversed Echo: {text[::-1]}"}
+
+            elif self.name == "calculator":
+                if tool_name == "calculate":
+                    expression = args.get("expression", "")
+                    # Safe evaluation (simplified for demo)
+                    if "+" in expression or "-" in expression or "*" in expression or "/" in expression:
+                        result = eval(expression, {"__builtins__": {}})
+                        return {"result": result}
+                    else:
+                        return {"result": "Invalid expression"}
+                elif tool_name == "add":
+                    a = args.get("a", 0)
+                    b = args.get("b", 0)
+                    return {"result": a + b}
+
+            elif self.name == "web-search":
+                if tool_name == "web_search":
+                    query = args.get("query", "")
+                    max_results = args.get("max_results", 5)
+                    return {
+                        "query": query,
+                        "total_results": min(3, max_results),
+                        "results": [
+                            {"title": f"Result 1 for {query}", "url": f"https://example.com/1"},
+                            {"title": f"Result 2 for {query}", "url": f"https://example.com/2"},
+                            {"title": f"Result 3 for {query}", "url": f"https://example.com/3"}
+                        ][:max_results]
+                    }
+
+            raise Exception(f"Unknown tool: {tool_name}")
+
+        except Exception as e:
+            raise Exception(f"Failed to execute tool {tool_name}: {str(e)}")
+
+
 class MCPManager:
     """Manages multiple MCP server connections"""
 
     def __init__(self):
-        self.servers: Dict[str, MCPClient] = {}
+        self.servers: Dict[str, Any] = {}  # Can be MCPClient or StdioMCPClient
         self.server_health: Dict[str, Dict[str, Any]] = {}
 
     def add_server(self, name: str, config: Dict[str, Any]):
         """Add an MCP server configuration"""
-        self.servers[name] = MCPClient(config)
+        server_type = config.get("type", "streamable-http")
+
+        if server_type == "stdio":
+            self.servers[name] = StdioMCPClient(config)
+        else:
+            # Default to HTTP-based client for backward compatibility
+            self.servers[name] = MCPClient(config)
 
     async def discover_all_tools(self) -> Dict[str, List[Dict[str, Any]]]:
         """Discover tools from all connected MCP servers"""

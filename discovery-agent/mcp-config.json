@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "echo": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["tools/echo_server.py"],
+      "env": {},
+      "description": "Simple echo tool for testing MCP functionality"
+    },
+    "calculator": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["tools/calculator_server.py"],
+      "env": {},
+      "description": "Safe mathematical calculations and operations"
+    },
+    "web-search": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["tools/web_search_server.py"],
+      "env": {
+        "SEARCH_API_KEY": "${SEARCH_API_KEY:-}"
+      },
+      "description": "Web search functionality (currently mock implementation)"
+    }
+  }
+}

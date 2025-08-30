@@ -4,15 +4,14 @@ from datetime import timedelta
 from typing import List
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView
+from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView, ConversationMemory
 
 @dataclass
 class State:
     conversation_id: str = ""
     turns: int = 0
     plan: List[PlanItem] = field(default_factory=list)
-    messages_digest: str = ""
-    messages: List[Message] = field(default_factory=list)
+    memory: ConversationMemory = field(default_factory=ConversationMemory)
     artifacts: List[FileRef] = field(default_factory=list)
     pending_tool_call: ToolCall | None = None
     gate_ok: bool = True
@@ -20,13 +19,17 @@ class State:
     last_processed_turn: int = 0
 
     def view_for_llm(self) -> dict:
+        # Provide recent messages for context (limit to last 20 for efficiency)
+        recent_messages = self.memory.short_term[-20:] if len(self.memory.short_term) > 20 else self.memory.short_term
+
         return {
             "plan": [p.model_dump() for p in self.plan],
             "turns": self.turns,
             "pending_tool_call": self.pending_tool_call.model_dump() if self.pending_tool_call else None,
             "artifacts": [a.model_dump() for a in self.artifacts],
-            "messages": [m.model_dump() for m in self.messages],
-            "messages_digest": self.messages_digest,
+            "messages": [m.model_dump() for m in recent_messages],
+            "memory_summary": self.memory.summary,
+            "user_patterns": self.memory.long_term_patterns,
             "gate_ok": self.gate_ok,
         }
 
@@ -43,8 +46,13 @@ class AgentOrchestratorWorkflow:
 
     @workflow.signal
     async def user_message(self, msg: Message):
-        # Store the user message in state
-        self.state.messages.append(msg)
+        # Store the user message in memory
+        self.state.memory.short_term.append(msg)
+
+        # Maintain memory size limit (keep last 50 messages)
+        if len(self.state.memory.short_term) > 50:
+            # Move older messages to summary if needed
+            self.state.memory.short_term = self.state.memory.short_term[-50:]
 
         await workflow.execute_activity(
             "append_transcript",
@@ -74,9 +82,9 @@ class AgentOrchestratorWorkflow:
 
     @workflow.query
     def get_status(self) -> StatusView:
-        # Get the latest assistant message content
+        # Get the latest assistant message content from memory
         output_text = None
-        for msg in reversed(self.state.messages):
+        for msg in reversed(self.state.memory.short_term):
             if msg.role == "assistant":
                 output_text = msg.content
                 break
@@ -89,6 +97,7 @@ class AgentOrchestratorWorkflow:
             artifacts=self.state.artifacts,
             state="done" if self.state.done else "running",
             output_text=output_text,
+            memory_summary=self.state.memory.summary,
         )
 
     @workflow.run
@@ -117,7 +126,10 @@ class AgentOrchestratorWorkflow:
 
             if action.type == "assistant_message":
                 if action.message:
-                    self.state.messages.append(action.message)
+                    self.state.memory.short_term.append(action.message)
+                    # Maintain memory size limit
+                    if len(self.state.memory.short_term) > 50:
+                        self.state.memory.short_term = self.state.memory.short_term[-50:]
                 self.state.last_processed_turn = self.state.turns
             elif action.type == "revise_plan" and action.plan_diff:
                 self.state.plan = action.plan_diff
@@ -139,12 +151,15 @@ class AgentOrchestratorWorkflow:
                 self.state.last_processed_turn = self.state.turns
 
             if self.state.should_summarize():
-                self.state.messages_digest = await workflow.execute_activity(
+                summary_result = await workflow.execute_activity(
                     "summarize_activity",
                     args=[self.state.view_for_llm()],
                     start_to_close_timeout=timedelta(minutes=1),
                     retry_policy=RetryPolicy(maximum_attempts=2),
                 )
+                # Update memory summary
+                self.state.memory.summary = summary_result
+                self.state.memory.last_summarized_turn = self.state.turns
 
             if self.state.should_continue_as_new():
                 workflow.continue_as_new(goal)

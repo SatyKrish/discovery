@@ -46,6 +46,12 @@ class AssistantAction(BaseModel):
     subagent_spec: Optional[Dict[str, Any]] = None
     plan_diff: Optional[List[PlanItem]] = None
 
+class ConversationMemory(BaseModel):
+    short_term: List[Message] = []  # Recent messages (last 20-50)
+    long_term_patterns: Dict[str, Any] = {}  # User patterns and preferences
+    summary: str = ""  # Rolling summary of conversation
+    last_summarized_turn: int = 0
+
 class StatusView(BaseModel):
     conversation_id: str
     plan: List[PlanItem]
@@ -54,3 +60,4 @@ class StatusView(BaseModel):
     artifacts: List[FileRef] = []
     state: str = "running"
     output_text: str | None = None
+    memory_summary: str | None = None

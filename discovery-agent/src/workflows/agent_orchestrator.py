@@ -12,10 +12,12 @@ class State:
     turns: int = 0
     plan: List[PlanItem] = field(default_factory=list)
     messages_digest: str = ""
+    messages: List[Message] = field(default_factory=list)
     artifacts: List[FileRef] = field(default_factory=list)
     pending_tool_call: ToolCall | None = None
     gate_ok: bool = True
     done: bool = False
+    last_processed_turn: int = 0
 
     def view_for_llm(self) -> dict:
         return {
@@ -23,6 +25,7 @@ class State:
             "turns": self.turns,
             "pending_tool_call": self.pending_tool_call.model_dump() if self.pending_tool_call else None,
             "artifacts": [a.model_dump() for a in self.artifacts],
+            "messages": [m.model_dump() for m in self.messages],
             "messages_digest": self.messages_digest,
             "gate_ok": self.gate_ok,
         }
@@ -40,6 +43,9 @@ class AgentOrchestratorWorkflow:
 
     @workflow.signal
     async def user_message(self, msg: Message):
+        # Store the user message in state
+        self.state.messages.append(msg)
+
         await workflow.execute_activity(
             "append_transcript",
             args=[
@@ -68,6 +74,13 @@ class AgentOrchestratorWorkflow:
 
     @workflow.query
     def get_status(self) -> StatusView:
+        # Get the latest assistant message content
+        output_text = None
+        for msg in reversed(self.state.messages):
+            if msg.role == "assistant":
+                output_text = msg.content
+                break
+
         return StatusView(
             conversation_id=self.state.conversation_id,
             plan=self.state.plan,
@@ -75,6 +88,7 @@ class AgentOrchestratorWorkflow:
             turns=self.state.turns,
             artifacts=self.state.artifacts,
             state="done" if self.state.done else "running",
+            output_text=output_text,
         )
 
     @workflow.run
@@ -90,6 +104,9 @@ class AgentOrchestratorWorkflow:
         self.state.plan = [PlanItem(**it) if isinstance(it, dict) else it for it in plan_data]
 
         while not self.state.done:
+            # Wait for new messages to process
+            await workflow.wait_condition(lambda: self.state.last_processed_turn < self.state.turns)
+
             action_dict: dict = await workflow.execute_activity(
                 "decision_agents_activity",
                 args=[self.state.view_for_llm()],
@@ -99,9 +116,12 @@ class AgentOrchestratorWorkflow:
             action: AssistantAction = AssistantAction(**action_dict)
 
             if action.type == "assistant_message":
-                self.state.turns += 1
+                if action.message:
+                    self.state.messages.append(action.message)
+                self.state.last_processed_turn = self.state.turns
             elif action.type == "revise_plan" and action.plan_diff:
                 self.state.plan = action.plan_diff
+                self.state.last_processed_turn = self.state.turns
             elif action.type == "tool_call" and action.call:
                 call = action.call
                 if call.requires_approval:
@@ -114,9 +134,9 @@ class AgentOrchestratorWorkflow:
                     start_to_close_timeout=timedelta(minutes=10),
                     retry_policy=RetryPolicy(maximum_attempts=3),
                 )
-                self.state.turns += 1
+                self.state.last_processed_turn = self.state.turns
             elif action.type == "spawn_subagent":
-                self.state.turns += 1
+                self.state.last_processed_turn = self.state.turns
 
             if self.state.should_summarize():
                 self.state.messages_digest = await workflow.execute_activity(

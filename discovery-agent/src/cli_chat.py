@@ -54,13 +54,26 @@ def main() -> None:
             if not prompt:
                 continue
             send_prompt(api, wid, prompt)
-            # Poll for turns increase (as a proxy for assistant reply)
+            # Poll for turns increase, then wait for actual response
             while True:
                 time.sleep(1)
                 status = get_status(api, wid)
                 turns = int(status.get("turns", 0))
                 if turns > last_turns:
-                    print("Agent: (response available; see status endpoint for details)")
+                    # Turns increased, now wait for the actual response
+                    print("Agent: (generating response...)")
+                    response_start = time.time()
+                    while True:
+                        output_text = status.get("output_text")
+                        if output_text:
+                            print(f"Agent: {output_text}")
+                            break
+                        # Timeout after 30 seconds
+                        if time.time() - response_start > 30:
+                            print("Agent: (response timeout - no text available)")
+                            break
+                        time.sleep(0.5)
+                        status = get_status(api, wid)
                     last_turns = turns
                     break
     except KeyboardInterrupt:

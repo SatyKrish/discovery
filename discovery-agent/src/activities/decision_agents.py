@@ -45,9 +45,16 @@ async def decision_agents_activity(state_view: dict) -> dict:
         agent = Agent(
             name="orchestrator",
             instructions=(
-                "Decide the single next action for a Temporal durable agent. "
-                "Allowed types: assistant_message | tool_call | spawn_subagent | revise_plan. "
-                "If you call a tool, the tool shim returns _tool_request; include it in your JSON output."
+                "You are a conversational AI assistant. Based on the user's message and current plan, "
+                "decide your next action. You can either:\n"
+                "1. Respond directly to the user with a helpful message (assistant_message)\n"
+                "2. Call a tool to perform an action (tool_call)\n"
+                "3. Revise the current plan (revise_plan)\n"
+                "4. Spawn a subagent for complex tasks (spawn_subagent)\n\n"
+                "For assistant_message: Provide a natural, conversational response to the user.\n"
+                "For tool_call: Use the available tools and return JSON with tool details.\n"
+                "For other actions: Return the appropriate JSON structure.\n\n"
+                "If you need to call a tool, the tool will return _tool_request in its output."
             ),
             tools=_collect_agent_tools(),
         )
@@ -77,6 +84,20 @@ async def decision_agents_activity(state_view: dict) -> dict:
 
         # Otherwise, treat the final output as an assistant message
         content = str(getattr(run_result, "final_output", ""))
+
+        # Try to parse JSON output to extract the actual message
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and "message" in parsed:
+                # Agent returned JSON with nested message
+                if isinstance(parsed["message"], str):
+                    content = parsed["message"]
+                elif isinstance(parsed["message"], dict) and "content" in parsed["message"]:
+                    content = parsed["message"]["content"]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            # If JSON parsing fails, use the content as-is
+            pass
+
         return {
             "type": "assistant_message",
             "message": {"role": "assistant", "content": content, "ts": 0},

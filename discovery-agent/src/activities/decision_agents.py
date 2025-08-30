@@ -6,6 +6,8 @@ from agents.run import Runner
 from typing import Callable, Dict, Any, List
 import json
 from src.registry import list_tool_specs
+from src.tool_chain_orchestrator import tool_chain_builder, tool_chain_executor, reflection_engine
+from src.hierarchical_agents import agent_coordinator, strategy_manager
 
 tracer = trace.get_tracer(__name__)
 
@@ -96,11 +98,30 @@ async def decision_agents_activity(state_view: dict) -> dict:
                 "- Use both default tools and any MCP server tools available\n"
                 "- Consider tool capabilities when planning tasks\n\n"
 
+                "TOOL CHAINING:\n"
+                "- For complex tasks, consider using multiple tools in sequence\n"
+                "- Use tool outputs as inputs for subsequent tools when beneficial\n"
+                "- Optimize tool combinations based on task requirements\n"
+                "- Explain multi-step tool processes to users\n\n"
+
+                "SELF-REFLECTION:\n"
+                "- Learn from successful and failed interactions\n"
+                "- Adapt strategies based on performance patterns\n"
+                "- Improve tool selection based on historical success rates\n"
+                "- Consider user preferences and interaction history\n\n"
+
                 "PROGRESS TRACKING:\n"
                 "- Keep the user informed about what you're working on\n"
                 "- Mark tasks as completed when finished\n"
                 "- Ask for feedback on completed work\n"
-                "- Suggest next steps clearly"
+                "- Suggest next steps clearly\n"
+                "- Provide status updates for complex operations\n\n"
+
+                "ADAPTIVE BEHAVIOR:\n"
+                "- Adjust communication style based on user responses\n"
+                "- Learn from interaction patterns\n"
+                "- Optimize response times and quality\n"
+                "- Personalize interactions based on user history"
             ),
             tools=tools,
         )

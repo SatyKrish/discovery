@@ -95,6 +95,68 @@ class ToolSpec(BaseModel):
     description: Optional[str] = None
     schema: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for args")
 
+class ToolChainStep(BaseModel):
+    tool_name: str
+    step_id: str
+    description: str
+    input_mapping: Dict[str, str]  # Maps input params to previous step outputs
+    output_mapping: Dict[str, str]  # Maps outputs to variable names
+    dependencies: List[str] = []  # Step IDs this step depends on
+    retry_count: int = 0
+    timeout: int = 30
+
+class ToolChain(BaseModel):
+    chain_id: str
+    name: str
+    description: str
+    steps: List[ToolChainStep]
+    input_schema: Dict[str, Any]
+    output_schema: Dict[str, Any]
+    success_criteria: str = ""
+    estimated_duration: int = 60  # seconds
+    created_at: float = 0.0
+
+class ToolChainExecution(BaseModel):
+    execution_id: str
+    chain_id: str
+    status: Literal["pending", "running", "completed", "failed"] = "pending"
+    current_step: str = ""
+    step_results: Dict[str, Any] = {}
+    variables: Dict[str, Any] = {}
+    started_at: float = 0.0
+    completed_at: float = 0.0
+    error_message: str = ""
+
+class SelfReflectionEntry(BaseModel):
+    reflection_id: str
+    timestamp: float
+    interaction_type: str  # "tool_use", "conversation", "planning"
+    success_rating: float  # 0.0 to 1.0
+    performance_metrics: Dict[str, Any]
+    lessons_learned: List[str]
+    strategy_adjustments: List[str]
+    user_feedback: str = ""
+
+class HierarchicalAgent(BaseModel):
+    agent_id: str
+    name: str
+    role: str  # "planning", "execution", "reflection", "communication"
+    capabilities: List[str]
+    specialization: str
+    performance_score: float = 0.5
+    experience_level: int = 1
+    active: bool = True
+
+class PerformanceAnalytics(BaseModel):
+    time_range: str  # "hour", "day", "week", "month"
+    total_interactions: int = 0
+    successful_interactions: int = 0
+    average_response_time: float = 0.0
+    tool_usage_stats: Dict[str, Dict[str, Any]] = {}
+    user_satisfaction_score: float = 0.0
+    common_patterns: List[str] = []
+    improvement_suggestions: List[str] = []
+
 class StatusView(BaseModel):
     conversation_id: str
     plan: List[PlanItem]

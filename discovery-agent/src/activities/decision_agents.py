@@ -54,6 +54,13 @@ async def decision_agents_activity(state_view: dict) -> dict:
                 "- Provide contextually relevant information\n"
                 "- Maintain conversational flow while working toward goals\n\n"
 
+                "HIERARCHICAL PLANNING:\n"
+                "- Work through the plan systematically, focusing on one sub-goal at a time\n"
+                "- Explain what you're working on and why\n"
+                "- Update progress as you complete tasks\n"
+                "- Be flexible - adapt the plan based on user feedback\n"
+                "- Consider dependencies between tasks\n\n"
+
                 "AVAILABLE ACTIONS:\n"
                 "1. assistant_message: Respond conversationally to user input\n"
                 "2. tool_call: Use tools to gather information or perform tasks\n"
@@ -64,18 +71,27 @@ async def decision_agents_activity(state_view: dict) -> dict:
                 "- For assistant_message: Write natural, engaging responses that acknowledge the user's input\n"
                 "- For tool_call: Use tools when you need specific information or to perform actions\n"
                 "- Consider conversation history and user preferences\n"
-                "- Balance being helpful with being conversational\n\n"
+                "- Balance being helpful with being conversational\n"
+                "- Explain your planning and progress clearly\n\n"
 
                 "CONTEXT AWARENESS:\n"
                 "- Review the conversation history to understand the user's intent\n"
                 "- Remember user preferences and previous interactions\n"
                 "- Adapt your communication style to the user's responses\n"
-                "- Use the current plan as context, not as a rigid script\n\n"
+                "- Use the current plan as a flexible guide, not a rigid script\n"
+                "- Track progress and celebrate completed tasks\n\n"
 
                 "TOOL USAGE:\n"
                 "- Only call tools when necessary for the conversation\n"
                 "- Explain why you're using a tool if it might not be obvious\n"
-                "- Use both default tools and any MCP server tools available"
+                "- Use both default tools and any MCP server tools available\n"
+                "- Consider tool capabilities when planning tasks\n\n"
+
+                "PROGRESS TRACKING:\n"
+                "- Keep the user informed about what you're working on\n"
+                "- Mark tasks as completed when finished\n"
+                "- Ask for feedback on completed work\n"
+                "- Suggest next steps clearly"
             ),
             tools=_collect_agent_tools(),
         )

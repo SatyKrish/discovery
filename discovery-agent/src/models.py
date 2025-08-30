@@ -52,6 +52,29 @@ class ConversationMemory(BaseModel):
     summary: str = ""  # Rolling summary of conversation
     last_summarized_turn: int = 0
 
+class SubGoal(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    status: Literal["pending", "in_progress", "completed", "failed"] = "pending"
+    priority: int = 1  # 1-5 scale
+    estimated_effort: str = ""  # "quick", "medium", "complex"
+    dependencies: List[str] = []  # IDs of prerequisite sub-goals
+    success_criteria: str = ""
+    progress: float = 0.0  # 0.0 to 1.0
+    tools_needed: List[str] = []
+    notes: str = ""
+
+class PlanningContext(BaseModel):
+    primary_goal: str
+    subgoals: List[SubGoal] = []
+    dependencies: Dict[str, List[str]] = {}  # Maps goal ID to list of dependent goal IDs
+    progress: Dict[str, float] = {}  # Maps goal ID to progress (0.0-1.0)
+    replan_triggers: List[str] = []  # Conditions that should trigger replanning
+    created_at: float = 0.0
+    last_updated: float = 0.0
+    version: int = 1
+
 class StatusView(BaseModel):
     conversation_id: str
     plan: List[PlanItem]

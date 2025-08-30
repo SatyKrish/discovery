@@ -4,13 +4,14 @@ from datetime import timedelta
 from typing import List
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView, ConversationMemory
+from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView, ConversationMemory, PlanningContext, SubGoal
 
 @dataclass
 class State:
     conversation_id: str = ""
     turns: int = 0
     plan: List[PlanItem] = field(default_factory=list)
+    planning_context: PlanningContext | None = None
     memory: ConversationMemory = field(default_factory=ConversationMemory)
     artifacts: List[FileRef] = field(default_factory=list)
     pending_tool_call: ToolCall | None = None

@@ -1,13 +1,7 @@
 from __future__ import annotations
 from typing import Callable, Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from src.models import ToolSpec
 from src.mcp_client import tool_orchestrator
-
-class ToolSpec(BaseModel):
-    name: str
-    fn: Callable[[dict], Any]
-    description: Optional[str] = None
-    schema: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for args")
 
 class ToolRegistry:
     def __init__(self):

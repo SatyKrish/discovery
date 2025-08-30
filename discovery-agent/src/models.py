@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any, Callable
 from pydantic import BaseModel, Field, field_validator
 
 Role = Literal["user", "assistant", "system"]
@@ -88,6 +88,12 @@ class ToolOrchestrator(BaseModel):
     mcp_servers: Dict[str, MCPServer] = {}
     tool_usage_stats: Dict[str, Dict[str, Any]] = {}
     last_discovery: float = 0.0
+
+class ToolSpec(BaseModel):
+    name: str
+    fn: Callable[[dict], Any]
+    description: Optional[str] = None
+    schema: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for args")
 
 class StatusView(BaseModel):
     conversation_id: str

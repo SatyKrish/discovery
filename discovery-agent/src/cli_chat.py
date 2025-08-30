@@ -39,7 +39,7 @@ def end_chat(_: str, __: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="CLI chat with Discovery Agent")
+    parser = argparse.ArgumentParser(description="Chat CLI with Discovery Agent")
     parser.add_argument("--api", default=os.environ.get("DISCOVERY_API_URL", "http://localhost:8080"),
                         help="Base URL of FastAPI service")
     args = parser.parse_args()

@@ -53,3 +53,4 @@ class StatusView(BaseModel):
     turns: int
     artifacts: List[FileRef] = []
     state: str = "running"
+    output_text: str | None = None

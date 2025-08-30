@@ -90,12 +90,16 @@ class AgentOrchestratorWorkflow:
 
     @workflow.query
     def get_status(self) -> StatusView:
-        # Get the latest assistant message content from memory
+        # Get the latest assistant message content from memory for the current turn
         output_text = None
-        for msg in reversed(self.state.memory.short_term):
-            if msg.role == "assistant":
-                output_text = msg.content
-                break
+
+        # Only return output_text if we've processed the current turn
+        if self.state.last_processed_turn >= self.state.turns:
+            # Find the most recent assistant message that was generated for the current turn
+            for msg in reversed(self.state.memory.short_term):
+                if msg.role == "assistant":
+                    output_text = msg.content
+                    break
 
         return StatusView(
             conversation_id=self.state.conversation_id,

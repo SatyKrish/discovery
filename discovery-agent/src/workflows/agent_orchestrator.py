@@ -42,15 +42,17 @@ class AgentOrchestratorWorkflow:
     async def user_message(self, msg: Message):
         await workflow.execute_activity(
             "append_transcript",
-            self.state.conversation_id or workflow.info().workflow_id,
-            msg.role,
-            msg.content,
+            args=[
+                self.state.conversation_id or workflow.info().workflow_id,
+                msg.role,
+                msg.content,
+            ],
             start_to_close_timeout=timedelta(seconds=10),
             retry_policy=RetryPolicy(maximum_attempts=3),
         )
         self.state.gate_ok = await workflow.execute_activity(
             "guardrail_check",
-            {"goal": self.state.plan[0].title if self.state.plan else "", "message": msg.content},
+            args=[{"goal": self.state.plan[0].title if self.state.plan else "", "message": msg.content}],
             start_to_close_timeout=timedelta(seconds=15),
             retry_policy=RetryPolicy(maximum_attempts=2),
         )
@@ -80,7 +82,7 @@ class AgentOrchestratorWorkflow:
         self.state.conversation_id = workflow.info().workflow_id
         plan_data = await workflow.execute_activity(
             "plan_activity",
-            {"goal": goal},
+            args=[{"goal": goal}],
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=RetryPolicy(maximum_attempts=3),
         )
@@ -90,7 +92,7 @@ class AgentOrchestratorWorkflow:
         while not self.state.done:
             action_dict: dict = await workflow.execute_activity(
                 "decision_agents_activity",
-                self.state.view_for_llm(),
+                args=[self.state.view_for_llm()],
                 start_to_close_timeout=timedelta(minutes=2),
                 retry_policy=RetryPolicy(maximum_attempts=3),
             )
@@ -107,7 +109,7 @@ class AgentOrchestratorWorkflow:
                     await workflow.wait_condition(lambda: self.state.pending_tool_call is None)
                 result: ToolResult = await workflow.execute_activity(
                     "tool_dispatch",
-                    call,
+                    args=[call],
                     heartbeat_timeout=timedelta(seconds=30),
                     start_to_close_timeout=timedelta(minutes=10),
                     retry_policy=RetryPolicy(maximum_attempts=3),
@@ -119,7 +121,7 @@ class AgentOrchestratorWorkflow:
             if self.state.should_summarize():
                 self.state.messages_digest = await workflow.execute_activity(
                     "summarize_activity",
-                    self.state.view_for_llm(),
+                    args=[self.state.view_for_llm()],
                     start_to_close_timeout=timedelta(minutes=1),
                     retry_policy=RetryPolicy(maximum_attempts=2),
                 )

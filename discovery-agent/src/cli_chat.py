@@ -16,7 +16,7 @@ from typing import Any, Dict
 import requests
 
 
-def start_session(api: str, goal: str = "Chat via CLI") -> str:
+def start_session(api: str, goal: str = "Have a helpful conversation") -> str:
     res = requests.post(f"{api}/sessions", json={"goal": goal})
     res.raise_for_status()
     return res.json().get("workflow_id")
@@ -32,14 +32,28 @@ def send_prompt(api: str, wid: str, prompt: str) -> None:
     res = requests.post(f"{api}/sessions/{wid}/messages", json={"text": prompt})
     res.raise_for_status()
 
+def end_conversation(api: str, wid: str) -> None:
+    """Send signal to end the conversation and terminate workflow"""
+    try:
+        res = requests.post(f"{api}/sessions/{wid}/end")
+        res.raise_for_status()
+    except Exception:
+        # Ignore errors when ending conversation
+        pass
 
-def end_chat(_: str, __: str) -> None:
-    # No explicit end endpoint; ignore
-    return None
+
+def end_chat(api: str, wid: str) -> None:
+    # Signal the workflow to end the conversation
+    try:
+        res = requests.post(f"{api}/sessions/{wid}/end")
+        res.raise_for_status()
+        print("Conversation ended.")
+    except Exception as e:
+        print(f"Warning: Could not end conversation properly: {e}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="CLI chat with Discovery Agent")
+    parser = argparse.ArgumentParser(description="Chat CLI with Discovery Agent")
     parser.add_argument("--api", default=os.environ.get("DISCOVERY_API_URL", "http://localhost:8080"),
                         help="Base URL of FastAPI service")
     args = parser.parse_args()
@@ -79,6 +93,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        # Send end conversation signal to terminate workflow
+        end_conversation(api, wid)
         end_chat(api, wid)
         print("\nChat ended.")
 

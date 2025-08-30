@@ -81,6 +81,13 @@ async def approve_tool(workflow_id: str, req: ApprovalRequest):
     await handle.signal(AgentOrchestratorWorkflow.approve_tool, req.tool_call_id, req.approved, req.args)
     return {"ok": True}
 
+@app.post("/sessions/{workflow_id}/end")
+async def end_conversation(workflow_id: str):
+    client = await get_client()
+    handle = client.get_workflow_handle(workflow_id)
+    await handle.signal(AgentOrchestratorWorkflow.end_conversation)
+    return {"ok": True}
+
 @app.get("/sessions/{workflow_id}/status")
 async def get_status(workflow_id: str):
     client = await get_client()

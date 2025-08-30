@@ -19,17 +19,48 @@ class _OpenAI:
         if settings.openai_api_key:
             kwargs["api_key"] = settings.openai_api_key
         self.client = OpenAI(**kwargs)
+        self.last_response_id = None  # Track conversation state
+
+    def create_response(self, user_message: str, model: str, tools=None, system_message=None):
+        """Create a response using OpenAI Responses API with multi-turn state management"""
+        input_messages = []
+
+        # Add system message if provided (only for first turn)
+        if system_message and not self.last_response_id:
+            input_messages.append({"role": "system", "content": system_message})
+
+        # Add user message
+        input_messages.append({"role": "user", "content": user_message})
+
+        # Prepare API call
+        kwargs = {
+            "model": model,
+            "input": input_messages,
+        }
+
+        # Add previous response ID for multi-turn conversation
+        if self.last_response_id:
+            kwargs["previous_response_id"] = self.last_response_id
+
+        # Add tools if provided
+        if tools:
+            kwargs["tools"] = tools
+
+        try:
+            resp = self.client.responses.create(**kwargs)
+
+            # Store response ID for next turn (multi-turn state management)
+            self.last_response_id = resp.id
+
+            return resp
+        except Exception as e:
+            logging.getLogger(__name__).exception("OpenAI Responses API call failed")
+            raise LLMError(str(e)) from e
 
     def json(self, system: str, user: str, model: str) -> Dict[str, Any]:
-        # Use Responses API and require output_text
+        """Legacy method for backward compatibility - creates response and extracts JSON"""
         try:
-            resp = self.client.responses.create(
-                model=model,
-                input=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            )
+            resp = self.create_response(user, model, system_message=system)
             txt = getattr(resp, "output_text", None)
             if not txt:
                 raise LLMError("Responses API returned no output_text")
@@ -37,6 +68,14 @@ class _OpenAI:
         except Exception as e:
             logging.getLogger(__name__).exception("OpenAI Responses API call failed")
             raise LLMError(str(e)) from e
+
+    def get_last_response_id(self):
+        """Get the last response ID for workflow state management"""
+        return self.last_response_id
+
+    def reset_conversation(self):
+        """Reset conversation state (useful for new sessions)"""
+        self.last_response_id = None
 
 
 _def_provider = None

@@ -12,12 +12,12 @@ class State:
     turns: int = 0
     plan: List[PlanItem] = field(default_factory=list)
     planning_context: PlanningContext | None = None
-    memory: ConversationMemory = field(default_factory=ConversationMemory)
     artifacts: List[FileRef] = field(default_factory=list)
     pending_tool_call: ToolCall | None = None
     gate_ok: bool = True
     done: bool = False
     last_processed_turn: int = 0
+    last_response_id: str = ""  # OpenAI Responses API state management
 
     def view_for_llm(self) -> dict:
         # Provide recent messages for context (limit to last 20 for efficiency)
@@ -32,6 +32,7 @@ class State:
             "memory_summary": self.memory.summary,
             "user_patterns": self.memory.long_term_patterns,
             "gate_ok": self.gate_ok,
+            "last_response_id": self.last_response_id,  # OpenAI Responses API state
         }
 
     def should_summarize(self) -> bool:
@@ -81,6 +82,11 @@ class AgentOrchestratorWorkflow:
                 self.state.pending_tool_call.args = edited_args
         self.state.pending_tool_call = None
 
+    @workflow.signal
+    async def end_conversation(self):
+        """Signal to end the conversation and terminate the workflow"""
+        self.state.done = True
+
     @workflow.query
     def get_status(self) -> StatusView:
         # Get the latest assistant message content from memory
@@ -125,6 +131,10 @@ class AgentOrchestratorWorkflow:
             )
             action: AssistantAction = AssistantAction(**action_dict)
 
+            # Update last_response_id from OpenAI Responses API
+            if "last_response_id" in action_dict:
+                self.state.last_response_id = action_dict["last_response_id"]
+
             if action.type == "assistant_message":
                 if action.message:
                     self.state.memory.short_term.append(action.message)
@@ -147,6 +157,39 @@ class AgentOrchestratorWorkflow:
                     start_to_close_timeout=timedelta(minutes=10),
                     retry_policy=RetryPolicy(maximum_attempts=3),
                 )
+
+                # Store tool result in conversation for context
+                if result and isinstance(result, dict) and result.get("output"):
+                    output_data = result["output"]
+                    # Handle nested output structure
+                    if isinstance(output_data, dict):
+                        output_text = str(output_data)
+                    else:
+                        output_text = str(output_data)
+
+                    tool_result_message = Message(
+                        role="assistant",
+                        content=f"Tool '{call.name}' result: {output_text}",
+                        ts=workflow.now().timestamp()
+                    )
+                    self.state.memory.short_term.append(tool_result_message)
+
+                # Generate response based on tool results
+                response_action_dict: dict = await workflow.execute_activity(
+                    "decision_agents_activity",
+                    args=[self.state.view_for_llm()],
+                    start_to_close_timeout=timedelta(minutes=2),
+                    retry_policy=RetryPolicy(maximum_attempts=3),
+                )
+                response_action: AssistantAction = AssistantAction(**response_action_dict)
+
+                # Process the response action
+                if response_action.type == "assistant_message" and response_action.message:
+                    self.state.memory.short_term.append(response_action.message)
+                    # Maintain memory size limit
+                    if len(self.state.memory.short_term) > 50:
+                        self.state.memory.short_term = self.state.memory.short_term[-50:]
+
                 self.state.last_processed_turn = self.state.turns
             elif action.type == "spawn_subagent":
                 self.state.last_processed_turn = self.state.turns

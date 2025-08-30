@@ -50,122 +50,107 @@ async def decision_agents_activity(state_view: dict) -> dict:
         span.set_attribute("temporal.run_id", info.workflow_run_id)
         span.set_attribute("temporal.attempt", info.attempt)
 
-        # Collect tools synchronously for the agent
+        # Get the current user message from state_view
+        messages = state_view.get("messages", [])
+        current_user_message = None
+
+        # Find the most recent user message
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                current_user_message = msg.get("content", "")
+                break
+
+        if not current_user_message:
+            # Fallback if no user message found
+            current_user_message = "Please continue the conversation."
+
+        # Get last response ID for multi-turn conversation
+        last_response_id = state_view.get("last_response_id", "")
+
+        # Collect tools for the agent
         tools = await _collect_agent_tools()
 
-        agent = Agent(
-            name="conversational_deep_agent",
-            instructions=(
-                "You are a helpful, conversational AI assistant engaged in a multi-turn dialogue. "
-                "Your goal is to have natural conversations while helping users accomplish their objectives.\n\n"
+        # Convert tools to OpenAI Responses API format
+        openai_tools = []
+        for tool in tools:
+            openai_tools.append({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "parameters": tool.schema or {"type": "object", "properties": {}}
+                }
+            })
 
-                "CONVERSATION STYLE:\n"
-                "- Acknowledge user messages naturally (e.g., 'Got it', 'I understand', 'That makes sense')\n"
-                "- Ask clarifying questions when needed\n"
-                "- Provide contextually relevant information\n"
-                "- Maintain conversational flow while working toward goals\n\n"
+        # Use OpenAI Responses API with multi-turn state management
+        from src.llm import _provider
 
-                "HIERARCHICAL PLANNING:\n"
-                "- Work through the plan systematically, focusing on one sub-goal at a time\n"
-                "- Explain what you're working on and why\n"
-                "- Update progress as you complete tasks\n"
-                "- Be flexible - adapt the plan based on user feedback\n"
-                "- Consider dependencies between tasks\n\n"
+        provider = _provider()
+        if last_response_id:
+            provider.last_response_id = last_response_id
 
-                "AVAILABLE ACTIONS:\n"
-                "1. assistant_message: Respond conversationally to user input\n"
-                "2. tool_call: Use tools to gather information or perform tasks\n"
-                "3. revise_plan: Update the current plan based on new information\n"
-                "4. spawn_subagent: Delegate complex tasks to specialized agents\n\n"
+        # Create system message for agent instructions
+        system_message = (
+            "You are a helpful conversational AI assistant.\n\n"
 
-                "RESPONSE GUIDELINES:\n"
-                "- For assistant_message: Write natural, engaging responses that acknowledge the user's input\n"
-                "- For tool_call: Use tools when you need specific information or to perform actions\n"
-                "- Consider conversation history and user preferences\n"
-                "- Balance being helpful with being conversational\n"
-                "- Explain your planning and progress clearly\n\n"
+            "IMPORTANT: Always respond to the user's MOST RECENT message first.\n\n"
 
-                "CONTEXT AWARENESS:\n"
-                "- Review the conversation history to understand the user's intent\n"
-                "- Remember user preferences and previous interactions\n"
-                "- Adapt your communication style to the user's responses\n"
-                "- Use the current plan as a flexible guide, not a rigid script\n"
-                "- Track progress and celebrate completed tasks\n\n"
+            "CONVERSATION:\n"
+            "- Focus on answering the current user message\n"
+            "- Use conversation history for context when relevant\n"
+            "- Keep responses natural and conversational\n\n"
 
-                "TOOL USAGE:\n"
-                "- Only call tools when necessary for the conversation\n"
-                "- Explain why you're using a tool if it might not be obvious\n"
-                "- Use both default tools and any MCP server tools available\n"
-                "- Consider tool capabilities when planning tasks\n\n"
+            "TOOLS:\n"
+            "- Use tools when you need specific information\n"
+            "- Explain briefly what you're doing\n\n"
 
-                "TOOL CHAINING:\n"
-                "- For complex tasks, consider using multiple tools in sequence\n"
-                "- Use tool outputs as inputs for subsequent tools when beneficial\n"
-                "- Optimize tool combinations based on task requirements\n"
-                "- Explain multi-step tool processes to users\n\n"
-
-                "SELF-REFLECTION:\n"
-                "- Learn from successful and failed interactions\n"
-                "- Adapt strategies based on performance patterns\n"
-                "- Improve tool selection based on historical success rates\n"
-                "- Consider user preferences and interaction history\n\n"
-
-                "PROGRESS TRACKING:\n"
-                "- Keep the user informed about what you're working on\n"
-                "- Mark tasks as completed when finished\n"
-                "- Ask for feedback on completed work\n"
-                "- Suggest next steps clearly\n"
-                "- Provide status updates for complex operations\n\n"
-
-                "ADAPTIVE BEHAVIOR:\n"
-                "- Adjust communication style based on user responses\n"
-                "- Learn from interaction patterns\n"
-                "- Optimize response times and quality\n"
-                "- Personalize interactions based on user history"
-            ),
-            tools=tools,
+            "RESPONSES:\n"
+            "- Answer the current user message directly\n"
+            "- Be helpful and friendly\n"
+            "- Stay focused on the immediate request"
         )
 
-        # Run the agent via the SDK Runner; pass state_view as a JSON string input
-        import json as _json
-        run_result = await Runner.run(agent, _json.dumps(state_view))
-
-        # Look for our sentinel in tool call outputs produced by function tools
-        for item in run_result.new_items:
-            if getattr(item, "type", "") == "tool_call_output_item":
-                out = getattr(item, "output", None)
-                if isinstance(out, dict) and "_tool_request" in out:
-                    tr = out["_tool_request"]
-                    return {
-                        "type": "tool_call",
-                        "call": {
-                            "id": "tc-" + info.activity_id,
-                            "name": tr.get("name"),
-                            "args": tr.get("args", {}),
-                            "requires_approval": False,
-                        },
-                        "message": None,
-                        "subagent_spec": None,
-                        "plan_diff": None,
-                    }
-
-        # Otherwise, treat the final output as an assistant message
-        content = str(getattr(run_result, "final_output", ""))
-
-        # Try to parse JSON output to extract the actual message
         try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict) and "message" in parsed:
-                # Agent returned JSON with nested message
-                if isinstance(parsed["message"], str):
-                    content = parsed["message"]
-                elif isinstance(parsed["message"], dict) and "content" in parsed["message"]:
-                    content = parsed["message"]["content"]
-        except (json.JSONDecodeError, KeyError, TypeError):
-            # If JSON parsing fails, use the content as-is
-            pass
+            # Create response using OpenAI Responses API
+            response = provider.create_response(
+                user_message=current_user_message,
+                model="gpt-4",  # Use appropriate model
+                tools=openai_tools if openai_tools else None,
+                system_message=system_message
+            )
 
-        return {
-            "type": "assistant_message",
-            "message": {"role": "assistant", "content": content, "ts": 0},
-        }
+            # Check for tool calls in the response
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                # Handle tool calls
+                tool_call = response.tool_calls[0]  # Take first tool call
+                return {
+                    "type": "tool_call",
+                    "call": {
+                        "id": f"tc-{info.activity_id}",
+                        "name": tool_call.function.name,
+                        "args": json.loads(tool_call.function.arguments),
+                        "requires_approval": False,
+                    },
+                    "message": None,
+                    "subagent_spec": None,
+                    "plan_diff": None,
+                }
+
+            # Extract the response text
+            content = getattr(response, "output_text", "")
+            if not content and hasattr(response, 'content'):
+                # Fallback for different response formats
+                content = str(response.content)
+
+            return {
+                "type": "assistant_message",
+                "message": {"role": "assistant", "content": content, "ts": 0},
+                "last_response_id": provider.get_last_response_id(),
+            }
+
+        except Exception as e:
+            # Fallback to simple response if API fails
+            return {
+                "type": "assistant_message",
+                "message": {"role": "assistant", "content": f"I apologize, but I encountered an error: {str(e)}", "ts": 0},
+            }

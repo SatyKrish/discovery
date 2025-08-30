@@ -27,6 +27,25 @@ async def main():
     except Exception:
         pass
     setup_tracing(settings.otel_service_name_worker, settings.otel_endpoint)
+    # Disable OpenAI Agents SDK tracing when using Azure keys for models to avoid 401s,
+    # unless an explicit OpenAI tracing key is provided.
+    try:
+        from agents import set_tracing_disabled, set_tracing_export_api_key  # type: ignore
+        # Default: disable Agents SDK tracing to avoid 401s when using Azure keys for models.
+        tracing_flag = (os.getenv("OPENAI_AGENTS_DISABLE_TRACING", "1") or "1").strip().lower()
+        if tracing_flag in ("1", "true", "yes", "on"):
+            set_tracing_disabled(True)
+        else:
+            # Only enable tracing if an explicit OpenAI tracing key is provided.
+            tracing_key = os.getenv("OPENAI_AGENTS_EXPORT_API_KEY")
+            if tracing_key:
+                set_tracing_export_api_key(tracing_key)
+            else:
+                set_tracing_disabled(True)
+    except Exception:
+        # If agents SDK isn't available for any reason, continue without changing tracing
+        pass
+
     # Configure OpenAI Agents plugin. Default ModelActivityParameters will set a 60s
     # start_to_close timeout for model calls if none is provided.
     agents_plugin = OpenAIAgentsPlugin(

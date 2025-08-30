@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-"""Simple CLI to interact with the FastAPI DeepAgent endpoints.
+"""Simple CLI to interact with the Discovery Agent API endpoints.
 
 Usage:
-    python cli_chat.py --api http://localhost:8000
+    python -m src.cli_chat --api http://localhost:8080
 
 The script starts a new workflow and lets the user chat with it from the
 terminal. Press Ctrl+C to exit.
@@ -11,61 +11,57 @@ terminal. Press Ctrl+C to exit.
 import argparse
 import os
 import time
-from typing import List
+from typing import Any, Dict
 
 import requests
 
 
-def start_workflow(api: str) -> str:
-    res = requests.post(f"{api}/workflow/start", json={})
+def start_session(api: str, goal: str = "Chat via CLI") -> str:
+    res = requests.post(f"{api}/sessions", json={"goal": goal})
     res.raise_for_status()
-    return res.json()["workflow_id"]
+    return res.json().get("workflow_id")
 
 
-def fetch_history(api: str, wid: str) -> List[dict]:
-    res = requests.get(f"{api}/workflow/{wid}/history")
+def get_status(api: str, wid: str) -> Dict[str, Any]:
+    res = requests.get(f"{api}/sessions/{wid}/status")
     res.raise_for_status()
-    return res.json().get("history", [])
+    return res.json()
 
 
 def send_prompt(api: str, wid: str, prompt: str) -> None:
-    res = requests.post(f"{api}/workflow/{wid}/prompt", json={"prompt": prompt})
+    res = requests.post(f"{api}/sessions/{wid}/messages", json={"text": prompt})
     res.raise_for_status()
 
 
-def end_chat(api: str, wid: str) -> None:
-    try:
-        requests.post(f"{api}/workflow/{wid}/end", timeout=2)
-    except Exception:
-        pass
+def end_chat(_: str, __: str) -> None:
+    # No explicit end endpoint; ignore
+    return None
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="CLI chat with DeepAgent")
-    parser.add_argument("--api", default=os.environ.get("DISCOVERY_API_URL", "http://localhost:8000"),
+    parser = argparse.ArgumentParser(description="CLI chat with Discovery Agent")
+    parser.add_argument("--api", default=os.environ.get("DISCOVERY_API_URL", "http://localhost:8080"),
                         help="Base URL of FastAPI service")
     args = parser.parse_args()
     api = args.api.rstrip("/")
 
-    wid = start_workflow(api)
-    print(f"Workflow started: {wid}")
-    history_len = 0
+    wid = start_session(api)
+    print(f"Session started: {wid}")
+    last_turns = 0
     try:
         while True:
             prompt = input("You: ")
             if not prompt:
                 continue
             send_prompt(api, wid, prompt)
-            # Poll for a new assistant message
+            # Poll for turns increase (as a proxy for assistant reply)
             while True:
                 time.sleep(1)
-                hist = fetch_history(api, wid)
-                if len(hist) > history_len + 1:
-                    # Expect a pair of messages: user and assistant
-                    msg = hist[-1].get("assistant")
-                    if msg:
-                        print(f"Agent: {msg}")
-                    history_len = len(hist)
+                status = get_status(api, wid)
+                turns = int(status.get("turns", 0))
+                if turns > last_turns:
+                    print("Agent: (response available; see status endpoint for details)")
+                    last_turns = turns
                     break
     except KeyboardInterrupt:
         pass

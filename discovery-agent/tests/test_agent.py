@@ -1,6 +1,6 @@
 import pytest
 from temporalio.testing import WorkflowEnvironment
-from discovery_agent.workflows.agent_orchestrator import AgentOrchestratorWorkflow
+from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 
 @pytest.mark.asyncio
 async def test_plan_initializes():

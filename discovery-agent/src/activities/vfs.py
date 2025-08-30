@@ -2,8 +2,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 from temporalio import activity
-from discovery_agent.config import settings
-from discovery_agent.models import FileRef
+from src.config import settings
+from src.models import FileRef
 
 @activity.defn
 async def vfs_put(bytes_data: bytes, filename: str, mime: str) -> FileRef:

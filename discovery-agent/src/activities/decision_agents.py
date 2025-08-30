@@ -1,9 +1,9 @@
 from __future__ import annotations
 from temporalio import activity
 from opentelemetry import trace
-from openai_agents import Agent, tool
+from agents import Agent, tool
 from typing import Callable, Dict, Any, List
-from discovery_agent.registry import list_tool_specs
+from src.registry import list_tool_specs
 
 tracer = trace.get_tracer(__name__)
 

@@ -17,8 +17,8 @@ export TASK_QUEUE=agent-queue
 export OTEL_ENDPOINT=http://localhost:4318/v1/traces   # optional
 ```
 
-4. Worker: `python -m discovery_agent.worker`
-5. API: `uvicorn discovery_agent.api.server:app --reload --port 8080`
+4. Worker: `python -m src.worker`
+5. API: `uvicorn src.api.server:app --reload --port 8080`
 
 ## Try it
 

@@ -4,13 +4,7 @@ from datetime import timedelta
 from typing import List
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from discovery_agent.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView
-from discovery_agent.activities.plan import plan_activity
-from discovery_agent.activities.decision_agents import decision_agents_activity
-from discovery_agent.activities.tool_dispatch import tool_dispatch
-from discovery_agent.activities.summarize import summarize_activity
-from discovery_agent.activities.transcript import append_transcript
-from discovery_agent.activities.guardrail import guardrail_check
+from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView
 
 @dataclass
 class State:
@@ -47,7 +41,7 @@ class AgentOrchestratorWorkflow:
     @workflow.signal
     async def user_message(self, msg: Message):
         await workflow.execute_activity(
-            append_transcript,
+            "append_transcript",
             self.state.conversation_id or workflow.info().workflow_id,
             msg.role,
             msg.content,
@@ -55,7 +49,7 @@ class AgentOrchestratorWorkflow:
             retry_policy=RetryPolicy(maximum_attempts=3),
         )
         self.state.gate_ok = await workflow.execute_activity(
-            guardrail_check,
+            "guardrail_check",
             {"goal": self.state.plan[0].title if self.state.plan else "", "message": msg.content},
             start_to_close_timeout=timedelta(seconds=15),
             retry_policy=RetryPolicy(maximum_attempts=2),
@@ -85,7 +79,7 @@ class AgentOrchestratorWorkflow:
     async def run(self, goal: str):
         self.state.conversation_id = workflow.info().workflow_id
         self.state.plan = await workflow.execute_activity(
-            plan_activity,
+            "plan_activity",
             {"goal": goal},
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=RetryPolicy(maximum_attempts=3),
@@ -93,7 +87,7 @@ class AgentOrchestratorWorkflow:
 
         while not self.state.done:
             action_dict: dict = await workflow.execute_activity(
-                decision_agents_activity,
+                "decision_agents_activity",
                 self.state.view_for_llm(),
                 start_to_close_timeout=timedelta(minutes=2),
                 retry_policy=RetryPolicy(maximum_attempts=3),
@@ -110,7 +104,7 @@ class AgentOrchestratorWorkflow:
                     self.state.pending_tool_call = call
                     await workflow.wait_condition(lambda: self.state.pending_tool_call is None)
                 result: ToolResult = await workflow.execute_activity(
-                    tool_dispatch,
+                    "tool_dispatch",
                     call,
                     heartbeat_timeout=timedelta(seconds=30),
                     start_to_close_timeout=timedelta(minutes=10),
@@ -122,7 +116,7 @@ class AgentOrchestratorWorkflow:
 
             if self.state.should_summarize():
                 self.state.messages_digest = await workflow.execute_activity(
-                    summarize_activity,
+                    "summarize_activity",
                     self.state.view_for_llm(),
                     start_to_close_timeout=timedelta(minutes=1),
                     retry_policy=RetryPolicy(maximum_attempts=2),

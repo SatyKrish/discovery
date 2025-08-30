@@ -1,8 +1,8 @@
 from __future__ import annotations
 from temporalio import activity
-from discovery_agent.models import ToolCall, ToolResult
-from discovery_agent.registry import execute_tool
-from discovery_agent.otel import get_tracer
+from src.models import ToolCall, ToolResult
+from src.registry import execute_tool
+from src.otel import get_tracer
 
 tracer = get_tracer(__name__)
 

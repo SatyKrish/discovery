@@ -3,16 +3,39 @@ import time
 from fastapi import FastAPI
 from pydantic import BaseModel
 from temporalio.client import Client
-from discovery_agent.config import settings
-from discovery_agent.otel import setup_tracing
-from discovery_agent.workflows.agent_orchestrator import AgentOrchestratorWorkflow
-from discovery_agent.models import Message
+from pathlib import Path
+from src.config import settings
+from src.otel import setup_tracing
+from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
+from src.models import Message
+from temporalio.contrib.openai_agents import OpenAIAgentsPlugin
+
+# Load .env files at process start (outside workflow sandbox)
+try:
+    from dotenv import load_dotenv
+    for f in (".env", ".env.local"):
+        p = Path(f)
+        if p.exists():
+            load_dotenv(p)
+except Exception:
+    pass
 
 app = FastAPI(title="Discovery Agent API")
 setup_tracing(settings.otel_service_name_api, settings.otel_endpoint)
 
 async def get_client() -> Client:
-    return await Client.connect(settings.temporal_target, namespace=settings.temporal_namespace)
+    # Ensure OpenAI env for data converter consistency (supports Ollama)
+    import os
+    if settings.openai_base_url and not os.environ.get("OPENAI_BASE_URL"):
+        os.environ["OPENAI_BASE_URL"] = settings.openai_base_url
+    if not os.environ.get("OPENAI_API_KEY"):
+        os.environ["OPENAI_API_KEY"] = settings.openai_api_key or "ollama"
+
+    return await Client.connect(
+        settings.temporal_target,
+        namespace=settings.temporal_namespace,
+        plugins=[OpenAIAgentsPlugin()],
+    )
 
 class StartRequest(BaseModel):
     goal: str
@@ -28,12 +51,13 @@ async def start_session(req: StartRequest):
         req.goal,
         id=workflow_id,
         task_queue=settings.task_queue,
-        search_attributes={
-            "Goal": [req.goal],
-            **({"Tenant": [req.tenant]} if req.tenant else {}),
-            **({"UserId": [req.user_id]} if req.user_id else {}),
+        # Use memo only; search attributes require pre-registration
+        memo={
+            "started_at": int(time.time()),
+            "Goal": req.goal,
+            **({"Tenant": req.tenant} if req.tenant else {}),
+            **({"UserId": req.user_id} if req.user_id else {}),
         },
-        memo={"started_at": int(time.time())},
     )
     return {"workflow_id": handle.id}
 

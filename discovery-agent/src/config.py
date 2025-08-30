@@ -2,6 +2,9 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
+    # Only read from environment; external .env files should be loaded by entrypoints
+    model_config = {"extra": "ignore"}
+
     temporal_target: str = "localhost:7233"
     temporal_namespace: str = "default"
     task_queue: str = "agent-queue"
@@ -11,6 +14,7 @@ class Settings(BaseSettings):
     llm_model_decision: str = "gpt-4o-mini"
     llm_model_plan: str = "gpt-4o-mini"
     openai_api_key: Optional[str] = None
+    openai_base_url: Optional[str] = None
     anthropic_api_key: Optional[str] = None
 
     # OTEL (OTLP HTTP endpoint, e.g., http://localhost:4318/v1/traces)

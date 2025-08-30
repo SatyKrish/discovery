@@ -1,10 +1,10 @@
 from __future__ import annotations
 from typing import List
 from temporalio import activity
-from discovery_agent.models import PlanItem
-from discovery_agent.llm import llm_json
-from discovery_agent.config import settings
-from discovery_agent.otel import get_tracer
+from src.models import PlanItem
+from src.llm import llm_json
+from src.config import settings
+from src.otel import get_tracer
 
 tracer = get_tracer(__name__)
 

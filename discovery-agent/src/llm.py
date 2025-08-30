@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from typing import Any, Dict
-from discovery_agent.config import settings
+from src.config import settings
 
 class LLMError(Exception):
     pass
@@ -9,21 +9,50 @@ class LLMError(Exception):
 class _OpenAI:
     def __init__(self):
         from openai import OpenAI
-        if not settings.openai_api_key:
-            raise LLMError("OPENAI_API_KEY not set")
-        self.client = OpenAI(api_key=settings.openai_api_key)
+        # For local providers like Ollama, an API key may not be required.
+        kwargs = {}
+        if settings.openai_api_key:
+            kwargs["api_key"] = settings.openai_api_key
+        if settings.openai_base_url:
+            kwargs["base_url"] = settings.openai_base_url
+        self.client = OpenAI(**kwargs)
 
     def json(self, system: str, user: str, model: str) -> Dict[str, Any]:
-        resp = self.client.responses.create(
-            model=model,
-            response_format={"type": "json_object"},
-            input=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        )
-        txt = resp.output_text
-        return json.loads(txt)
+        # Prefer Responses API when available; fallback to Chat Completions for Ollama/OpenAI-compatible servers
+        try:
+            resp = self.client.responses.create(
+                model=model,
+                response_format={"type": "json_object"},
+                input=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            txt = getattr(resp, "output_text", None)
+            if not txt:
+                # Some servers don’t implement output_text; extract from content
+                txt = "".join([getattr(p, "text", "") for p in getattr(resp, "output", [])])
+            return json.loads(txt)
+        except Exception:
+            # Fallback path for Ollama and other compat servers without Responses API
+            cmpl = self.client.chat.completions.create(
+                model=model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": system + "\nReturn ONLY valid JSON."},
+                    {"role": "user", "content": user},
+                ],
+            )
+            content = None
+            if cmpl.choices:
+                # OpenAI SDK returns content as a string for chat
+                content = cmpl.choices[0].message.content
+                # Some compat servers might return list of parts
+                if isinstance(content, list):
+                    content = "".join(str(p) for p in content)
+            if not content:
+                raise LLMError("Empty response from model")
+            return json.loads(_coerce_json(str(content)))
 
 class _Anthropic:
     def __init__(self):

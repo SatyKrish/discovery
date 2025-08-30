@@ -13,6 +13,8 @@ from src.activities.decision_agents import decision_agents_activity
 from src.activities.tool_dispatch import tool_dispatch
 from src.activities.vfs import vfs_put
 from src.activities.summarize import summarize_activity
+from src.activities.transcript import append_transcript
+from src.activities.guardrail import guardrail_check
 from temporalio.contrib.openai_agents import OpenAIAgentsPlugin, ModelActivityParameters
 from temporalio.contrib.pydantic import pydantic_data_converter
 
@@ -67,7 +69,15 @@ async def main():
         client,
         task_queue=settings.task_queue,
         workflows=[AgentOrchestratorWorkflow, SubAgentWorkflow],
-    activities=[plan_activity, decision_agents_activity, tool_dispatch, vfs_put, summarize_activity],
+    activities=[
+            plan_activity,
+            decision_agents_activity,
+            tool_dispatch,
+            vfs_put,
+            summarize_activity,
+            append_transcript,
+            guardrail_check,
+        ],
     # build_id="v1",  # enable Worker Versioning when ready
     )
     print(f"Worker started on queue {settings.task_queue}")

@@ -1,17 +1,19 @@
 # Helper targets to run Temporal worker and FastAPI server
 
-.PHONY: install api worker dev fmt test venv venv-info venv-shell cli
+.PHONY: install api worker dev fmt test venv venv-info venv-shell activate cli
 
 VENV_DIR:=.venv
 # Make all recipes run inside the venv by prepending it to PATH
 export VIRTUAL_ENV:=$(abspath $(VENV_DIR))
 export PATH:=$(VIRTUAL_ENV)/bin:$(PATH)
+# Treat 'src' as a package; add project root to PYTHONPATH so imports like 'from src.x import y' work
+export PYTHONPATH:=$(abspath .):$(PYTHONPATH)
 
 PY=$(VENV_DIR)/bin/python
 PIP=$(VENV_DIR)/bin/pip
 
 # Default API endpoint for CLI (override with `make cli API=http://host:port`)
-API?=http://localhost:8000
+API?=http://localhost:8080
 CLI_ARGS?=
 
 venv: $(VENV_DIR)/bin/python
@@ -22,13 +24,21 @@ $(VENV_DIR)/bin/python:
 	$(VENV_DIR)/bin/python -m pip install --upgrade pip
 
 install: venv
+ifneq (,$(wildcard requirements.txt))
+	@echo "Installing from requirements.txt"
 	$(PIP) install -r requirements.txt
+else ifneq (,$(wildcard pyproject.toml))
+	@echo "Installing project in editable mode (pyproject.toml detected)"
+	$(PIP) install -e .
+else
+	@echo "No pyproject.toml or requirements.txt found. Please add one." && exit 1
+endif
 
 api: venv
-	$(VENV_DIR)/bin/uvicorn api:app --host $${HOST:-0.0.0.0} --port $${PORT:-8000} --reload
+	$(VENV_DIR)/bin/uvicorn src.api.server:app --host $${HOST:-0.0.0.0} --port $${PORT:-8080} --reload
 
 worker: venv
-	$(PY) -m temporal.temporal_worker
+	$(PY) -m src.worker
 
 # Run both api and worker in separate terminals (macOS only suggestion)
 # Use: make api  (in one terminal)
@@ -47,14 +57,17 @@ venv-info: venv
 	@echo "VIRTUAL_ENV=$(VIRTUAL_ENV)"
 	@echo "python=$$(which python)"
 	@echo "pip=$$(which pip)"
-	python -V
-	pip -V
+	$(PY) -V || true
+	$(PIP) -V || true
 
 # Open an interactive subshell with the venv activated (type 'exit' to leave)
 venv-shell: venv
 	@echo "Starting interactive shell with venv activated. Type 'exit' to leave."
 	$(SHELL) -i -c "source $(VENV_DIR)/bin/activate; exec $(SHELL) -i"
 
+# Convenience alias: `make activate` opens a new shell with the venv activated
+activate: venv-shell
+
 # Run the terminal chat client against the API
 cli: venv
-	$(PY) cli_chat.py --api $(API) $(CLI_ARGS)
+	$(PY) -m src.cli_chat --api $(API) $(CLI_ARGS)

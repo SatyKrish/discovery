@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import requests
 
@@ -54,21 +55,35 @@ PENDING_STATES = {
 
 
 def _extract_status_url(api: str, first_reply: Dict[str, Any], session_id: Optional[str]) -> Optional[str]:
-    """Try to find a status URL in the server's reply."""
+    """
+    Try to find a status URL in the server's reply; if not present,
+    fall back to commonly used patterns with session/workflow ids.
+    """
+    # 1) direct hint from server
     if "status_url" in first_reply and isinstance(first_reply["status_url"], str):
         return first_reply["status_url"]
 
+    # 2) id-based hint provided by server
     rid = first_reply.get("response_id") or first_reply.get("run_id") or first_reply.get("id")
     if isinstance(rid, str):
         return f"{api.rstrip('/')}/status/{rid}"
 
+    # 3) fall back to session status if exposed that way
     if session_id:
         return f"{api.rstrip('/')}/sessions/{session_id}/status"
+
     return None
 
 
 def _extract_output_text(obj: Dict[str, Any]) -> Optional[str]:
-    """Be generous with shapes when extracting text."""
+    """
+    Be generous with shapes:
+      - { "output_text": "..." }
+      - { "result": "..."} or nested: { "response": { "output_text": "..." } }
+      - { "results": [ { "result": "..."} ] }
+      - OpenAI-style choices/content
+    """
+    # direct
     for key in ("output_text", "final_text", "result", "message", "text"):
         v = obj.get(key)
         if isinstance(v, str) and v.strip():
@@ -81,12 +96,14 @@ def _extract_output_text(obj: Dict[str, Any]) -> Optional[str]:
         if isinstance(content, str) and content.strip():
             return content.strip()
 
+    # nested response
     resp = obj.get("response")
     if isinstance(resp, dict):
         v = _extract_output_text(resp)
         if v:
             return v
 
+    # list of results
     results = obj.get("results")
     if isinstance(results, list):
         for r in results:
@@ -95,6 +112,7 @@ def _extract_output_text(obj: Dict[str, Any]) -> Optional[str]:
                 if v:
                     return v
 
+    # OpenAI-like
     choices = obj.get("choices")
     if isinstance(choices, list) and choices:
         ch0 = choices[0]
@@ -105,8 +123,10 @@ def _extract_output_text(obj: Dict[str, Any]) -> Optional[str]:
                 if isinstance(content, str):
                     return content.strip()
 
+    # Responses API style aggregated text
     output = obj.get("output")
     if isinstance(output, dict):
+        # Sometimes `output_text` sits here
         if isinstance(output.get("output_text"), str):
             return output["output_text"].strip()
     return None

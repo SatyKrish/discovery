@@ -18,6 +18,7 @@ class State:
     done: bool = False
     last_processed_turn: int = 0
     last_response_id: str = ""  # OpenAI Responses API state management
+    memory: ConversationMemory = field(default_factory=ConversationMemory)
 
     def view_for_llm(self) -> dict:
         # Provide recent messages for context (limit to last 20 for efficiency)

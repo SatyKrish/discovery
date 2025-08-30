@@ -75,6 +75,20 @@ class PlanningContext(BaseModel):
     last_updated: float = 0.0
     version: int = 1
 
+class MCPServer(BaseModel):
+    name: str
+    url: str
+    capabilities: List[str] = []
+    tools: List[Dict[str, Any]] = []
+    last_connected: float = 0.0
+    health_status: str = "unknown"  # "healthy", "unhealthy", "unknown"
+
+class ToolOrchestrator(BaseModel):
+    static_tools: Dict[str, ToolSpec] = {}
+    mcp_servers: Dict[str, MCPServer] = {}
+    tool_usage_stats: Dict[str, Dict[str, Any]] = {}
+    last_discovery: float = 0.0
+
 class StatusView(BaseModel):
     conversation_id: str
     plan: List[PlanItem]

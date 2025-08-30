@@ -28,10 +28,16 @@ def _make_agent_tool(name: str, schema: Dict[str, Any], description: str) -> Fun
     )
 
 
-def _collect_agent_tools() -> List[FunctionTool]:
+async def _collect_agent_tools() -> List[FunctionTool]:
+    """Collect all available tools (static + dynamic) for the agent"""
     tools: List[FunctionTool] = []
-    for spec in list_tool_specs():
+
+    # Get all available tool specs
+    tool_specs = list_tool_specs()
+
+    for spec in tool_specs:
         tools.append(_make_agent_tool(spec.name, spec.schema or {}, spec.description or spec.name))
+
     return tools
 
 @activity.defn
@@ -41,6 +47,9 @@ async def decision_agents_activity(state_view: dict) -> dict:
         span.set_attribute("temporal.workflow_id", info.workflow_id)
         span.set_attribute("temporal.run_id", info.workflow_run_id)
         span.set_attribute("temporal.attempt", info.attempt)
+
+        # Collect tools synchronously for the agent
+        tools = await _collect_agent_tools()
 
         agent = Agent(
             name="conversational_deep_agent",
@@ -93,7 +102,7 @@ async def decision_agents_activity(state_view: dict) -> dict:
                 "- Ask for feedback on completed work\n"
                 "- Suggest next steps clearly"
             ),
-            tools=_collect_agent_tools(),
+            tools=tools,
         )
 
         # Run the agent via the SDK Runner; pass state_view as a JSON string input

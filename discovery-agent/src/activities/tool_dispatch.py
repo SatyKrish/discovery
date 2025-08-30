@@ -1,7 +1,7 @@
 from __future__ import annotations
 from temporalio import activity
 from src.models import ToolCall, ToolResult
-from src.registry import execute_tool
+from src.registry import execute_tool, registry
 from src.otel import get_tracer
 
 tracer = get_tracer(__name__)
@@ -15,7 +15,14 @@ async def tool_dispatch(call: ToolCall) -> ToolResult:
         span.set_attribute("temporal.attempt", ai.attempt)
         span.set_attribute("tool.name", call.name)
         try:
-            output = execute_tool(call.name, call.args)
+            # Check if it's a static tool first (for backward compatibility)
+            if registry.has(call.name):
+                # Use synchronous execution for static tools
+                output = registry.execute(call.name, call.args)
+            else:
+                # Use async execution for dynamic/MCP tools
+                output = await execute_tool(call.name, call.args)
+
             return ToolResult(id=call.id, ok=True, output=output)
         except Exception as e:
             span.record_exception(e)

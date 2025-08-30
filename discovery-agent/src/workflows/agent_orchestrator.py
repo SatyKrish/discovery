@@ -87,6 +87,8 @@ class AgentOrchestratorWorkflow:
     async def end_conversation(self):
         """Signal to end the conversation and terminate the workflow"""
         self.state.done = True
+        # Force exit from any wait conditions by ensuring turns are processed
+        self.state.last_processed_turn = max(self.state.last_processed_turn, self.state.turns)
 
     @workflow.query
     def get_status(self) -> StatusView:
@@ -125,8 +127,18 @@ class AgentOrchestratorWorkflow:
         self.state.plan = [PlanItem(**it) if isinstance(it, dict) else it for it in plan_data]
 
         while not self.state.done:
-            # Wait for new messages to process
-            await workflow.wait_condition(lambda: self.state.last_processed_turn < self.state.turns)
+            # Wait for new messages to process, but also check if we should exit due to end signal
+            # Add timeout to prevent indefinite waiting (Temporal best practice)
+            try:
+                await workflow.wait_condition(
+                    lambda: (self.state.last_processed_turn < self.state.turns) and not self.state.done,
+                    timeout=timedelta(minutes=5)  # Timeout after 5 minutes of inactivity
+                )
+            except TimeoutError:
+                # If we timeout due to inactivity, terminate the workflow
+                if not self.state.done:
+                    self.state.done = True
+                    break
 
             action_dict: dict = await workflow.execute_activity(
                 "decision_agents_activity",
@@ -154,7 +166,7 @@ class AgentOrchestratorWorkflow:
                 call = action.call
                 if call.requires_approval:
                     self.state.pending_tool_call = call
-                    await workflow.wait_condition(lambda: self.state.pending_tool_call is None)
+                    await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
                 result: ToolResult = await workflow.execute_activity(
                     "tool_dispatch",
                     args=[call],

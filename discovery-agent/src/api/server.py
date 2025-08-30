@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from temporalio.client import Client
 from pathlib import Path
@@ -32,7 +32,7 @@ async def get_client() -> Client:
         settings.temporal_target,
         namespace=settings.temporal_namespace,
         plugins=[OpenAIAgentsPlugin()],
-    data_converter=pydantic_data_converter,
+        data_converter=pydantic_data_converter,
     )
 
 class StartRequest(BaseModel):
@@ -90,3 +90,34 @@ async def get_status(workflow_id: str):
         return status.model_dump()
     except Exception:
         return status
+
+
+class ChatRequest(BaseModel):
+    session_id: str | None = None
+    input: str
+    goal: str | None = None
+
+
+@app.post("/chat")
+async def chat(req: ChatRequest, request: Request):
+    client = await get_client()
+    session_id = req.session_id
+    goal = req.goal or "chat"
+    if not session_id:
+        session_id = f"session-{int(time.time()*1000)}"
+        await client.start_workflow(
+            AgentOrchestratorWorkflow.run,
+            goal,
+            id=session_id,
+            task_queue=settings.task_queue,
+            memo={"started_at": int(time.time()), "Goal": goal},
+        )
+
+    handle = client.get_workflow_handle(session_id)
+    await handle.signal(
+        AgentOrchestratorWorkflow.user_message,
+        Message(role="user", content=req.input, ts=time.time()),
+    )
+    base = str(request.base_url).rstrip("/")
+    status_url = f"{base}/sessions/{session_id}/status"
+    return {"session_id": session_id, "status_url": status_url}

@@ -16,6 +16,7 @@ class State:
     pending_tool_call: ToolCall | None = None
     gate_ok: bool = True
     done: bool = False
+    last_message: Message | None = None
 
     def view_for_llm(self) -> dict:
         return {
@@ -75,6 +76,7 @@ class AgentOrchestratorWorkflow:
             turns=self.state.turns,
             artifacts=self.state.artifacts,
             state="done" if self.state.done else "running",
+            last_message=self.state.last_message,
         )
 
     @workflow.run
@@ -99,6 +101,18 @@ class AgentOrchestratorWorkflow:
             action: AssistantAction = AssistantAction(**action_dict)
 
             if action.type == "assistant_message":
+                if action.message:
+                    await workflow.execute_activity(
+                        "append_transcript",
+                        args=[
+                            self.state.conversation_id or workflow.info().workflow_id,
+                            action.message.role,
+                            action.message.content,
+                        ],
+                        start_to_close_timeout=timedelta(seconds=10),
+                        retry_policy=RetryPolicy(maximum_attempts=3),
+                    )
+                    self.state.last_message = action.message
                 self.state.turns += 1
             elif action.type == "revise_plan" and action.plan_diff:
                 self.state.plan = action.plan_diff

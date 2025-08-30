@@ -8,13 +8,21 @@
 ## Run
 1) Start Temporal: `temporal server start-dev`
 2) Install deps: `pip install -e .`
-3) Env:
+3) Env (recommended via .env.local):
 ```bash
-export OPENAI_API_KEY=sk-...          # or ANTHROPIC_API_KEY=sk-...
-export TEMPORAL_TARGET=localhost:7233
-export TEMPORAL_NAMESPACE=default
-export TASK_QUEUE=agent-queue
-export OTEL_ENDPOINT=http://localhost:4318/v1/traces   # optional
+# Azure OpenAI
+AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com/
+AZURE_OPENAI_API_KEY=<your-key>
+AZURE_OPENAI_API_VERSION=2024-05-01-preview
+# Deployment names (models)
+LLM_MODEL_DECISION=gpt-4.1
+LLM_MODEL_PLAN=gpt-4.1
+
+# Temporal
+TEMPORAL_TARGET=localhost:7233
+TEMPORAL_NAMESPACE=default
+TASK_QUEUE=agent-queue
+OTEL_ENDPOINT=http://localhost:4318/v1/traces   # optional
 ```
 
 4. Worker: `python -m src.worker`

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from temporalio.client import Client
 from temporalio.worker import Worker
-from src.config import settings
+from src.config import settings, apply_openai_env_from_settings
 from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.workflows.subagent import SubAgentWorkflow
@@ -32,12 +32,8 @@ async def main():
         model_params=ModelActivityParameters()
     )
 
-    # Ensure OpenAI client env vars are present for the Agents plugin (supports Ollama)
-    if settings.openai_base_url and not os.environ.get("OPENAI_BASE_URL"):
-        os.environ["OPENAI_BASE_URL"] = settings.openai_base_url
-    if not os.environ.get("OPENAI_API_KEY"):
-        # Use configured key or a dummy value for local providers like Ollama
-        os.environ["OPENAI_API_KEY"] = settings.openai_api_key or "ollama"
+    # Project configured Azure/OpenAI settings into env for plugins/clients
+    apply_openai_env_from_settings()
 
     # Attach the plugin to the client so data conversion and tracing are configured.
     client = await Client.connect(

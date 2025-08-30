@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from temporalio.client import Client
 from pathlib import Path
-from src.config import settings
+from src.config import settings, apply_openai_env_from_settings
 from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.models import Message
@@ -24,12 +24,8 @@ app = FastAPI(title="Discovery Agent API")
 setup_tracing(settings.otel_service_name_api, settings.otel_endpoint)
 
 async def get_client() -> Client:
-    # Ensure OpenAI env for data converter consistency (supports Ollama)
-    import os
-    if settings.openai_base_url and not os.environ.get("OPENAI_BASE_URL"):
-        os.environ["OPENAI_BASE_URL"] = settings.openai_base_url
-    if not os.environ.get("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = settings.openai_api_key or "ollama"
+    # Ensure Azure/OpenAI env for data converter consistency
+    apply_openai_env_from_settings()
 
     return await Client.connect(
         settings.temporal_target,

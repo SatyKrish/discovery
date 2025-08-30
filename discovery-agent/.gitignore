@@ -22,3 +22,5 @@ coverage.xml
 # Misc
 .DS_Store
 *.log
+.env
+.env.local

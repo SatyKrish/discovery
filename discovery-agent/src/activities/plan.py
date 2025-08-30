@@ -5,6 +5,7 @@ from src.models import PlanItem
 from src.llm import llm_json
 from src.config import settings
 from src.otel import get_tracer
+from opentelemetry.trace import Status, StatusCode
 
 tracer = get_tracer(__name__)
 
@@ -20,6 +21,11 @@ async def plan_activity(context: dict) -> List[PlanItem]:
         span.set_attribute("temporal.workflow_id", ai.workflow_id)
         span.set_attribute("temporal.run_id", ai.workflow_run_id)
         span.set_attribute("temporal.attempt", ai.attempt)
-        data = llm_json(system, user, settings.llm_model_plan)
-        items = data if isinstance(data, list) else data.get("plan", [])
-        return [PlanItem(**it) for it in items]
+        try:
+            data = llm_json(system, user, settings.llm_model_plan)
+            items = data if isinstance(data, list) else data.get("plan", [])
+            return [PlanItem(**it) for it in items]
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            raise

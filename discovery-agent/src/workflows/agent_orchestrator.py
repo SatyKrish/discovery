@@ -78,12 +78,14 @@ class AgentOrchestratorWorkflow:
     @workflow.run
     async def run(self, goal: str):
         self.state.conversation_id = workflow.info().workflow_id
-        self.state.plan = await workflow.execute_activity(
+        plan_data = await workflow.execute_activity(
             "plan_activity",
             {"goal": goal},
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=RetryPolicy(maximum_attempts=3),
         )
+        # Convert JSON-serializable dicts back into PlanItem objects
+        self.state.plan = [PlanItem(**it) if isinstance(it, dict) else it for it in plan_data]
 
         while not self.state.done:
             action_dict: dict = await workflow.execute_activity(

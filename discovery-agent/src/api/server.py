@@ -9,6 +9,7 @@ from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.models import Message
 from temporalio.contrib.openai_agents import OpenAIAgentsPlugin
+from temporalio.contrib.pydantic import pydantic_data_converter
 
 # Load .env files at process start (outside workflow sandbox)
 try:
@@ -31,6 +32,7 @@ async def get_client() -> Client:
         settings.temporal_target,
         namespace=settings.temporal_namespace,
         plugins=[OpenAIAgentsPlugin()],
+    data_converter=pydantic_data_converter,
     )
 
 class StartRequest(BaseModel):

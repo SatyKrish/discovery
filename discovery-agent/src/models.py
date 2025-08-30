@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Literal, Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Role = Literal["user", "assistant", "system"]
 
@@ -14,6 +14,12 @@ class PlanItem(BaseModel):
     title: str
     status: Literal["todo","doing","done"] = "todo"
     tool_hints: list[str] | None = None
+
+    # Accept ints or strings for id; always store as a string for consistency
+    @field_validator("id", mode="before")
+    @classmethod
+    def _coerce_id(cls, v):
+        return str(v)
 
 class FileRef(BaseModel):
     uri: str

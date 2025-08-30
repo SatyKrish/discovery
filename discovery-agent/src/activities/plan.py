@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Dict, Any
 from temporalio import activity
 from src.models import PlanItem
 from src.llm import llm_json
@@ -10,7 +10,7 @@ from opentelemetry.trace import Status, StatusCode
 tracer = get_tracer(__name__)
 
 @activity.defn
-async def plan_activity(context: dict) -> List[PlanItem]:
+async def plan_activity(context: dict) -> List[Dict[str, Any]]:
     ai = activity.info()
     system = (
         "You are a planning assistant. Return ONLY a JSON list of PlanItem with fields: "
@@ -24,7 +24,15 @@ async def plan_activity(context: dict) -> List[PlanItem]:
         try:
             data = llm_json(system, user, settings.llm_model_plan)
             items = data if isinstance(data, list) else data.get("plan", [])
-            return [PlanItem(**it) for it in items]
+            # Ensure PlanItem instances
+            normalized: List[PlanItem] = []
+            for it in items:
+                if isinstance(it, PlanItem):
+                    normalized.append(it)
+                else:
+                    normalized.append(PlanItem(**it))
+            # Return JSON-serializable payload to the workflow
+            return [pi.model_dump() for pi in normalized]
         except Exception as e:
             span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, str(e)))

@@ -14,6 +14,7 @@ from src.activities.tool_dispatch import tool_dispatch
 from src.activities.vfs import vfs_put
 from src.activities.summarize import summarize_activity
 from temporalio.contrib.openai_agents import OpenAIAgentsPlugin, ModelActivityParameters
+from temporalio.contrib.pydantic import pydantic_data_converter
 
 async def main():
     # Load .env files at process start (outside workflow sandbox)
@@ -39,7 +40,8 @@ async def main():
     client = await Client.connect(
         settings.temporal_target,
         namespace=settings.temporal_namespace,
-        plugins=[agents_plugin],
+    plugins=[agents_plugin],
+    data_converter=pydantic_data_converter,
     )
 
     worker = Worker(

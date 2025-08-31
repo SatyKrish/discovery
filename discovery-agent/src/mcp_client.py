@@ -211,14 +211,30 @@ class StdioMCPClient:
                     result = await session.call_tool(tool_name, arguments=args)
 
                     # Convert the result to a dictionary format
-                    if hasattr(result, 'content'):
+                    if hasattr(result, 'content') and result.content:
                         # Handle MCP result format
                         content = []
-                        for item in result.content:
-                            if hasattr(item, 'text'):
-                                content.append({"type": "text", "text": item.text})
-                            elif hasattr(item, 'data'):
-                                content.append({"type": "data", "data": item.data})
+                        try:
+                            for item in result.content:
+                                # Handle different MCP content types
+                                if hasattr(item, 'type'):
+                                    item_type = item.type
+                                    if item_type == "text" and hasattr(item, 'text'):
+                                        content.append({"type": "text", "text": item.text})
+                                    elif hasattr(item, 'data'):
+                                        content.append({"type": item_type, "data": item.data})
+                                    else:
+                                        # Fallback for unknown content types
+                                        content.append({"type": item_type, "content": str(item)})
+                                elif isinstance(item, dict):
+                                    # Handle dict-like content (fallback)
+                                    content.append(item)
+                                else:
+                                    # Handle other content types
+                                    content.append({"type": "unknown", "content": str(item)})
+                        except Exception as content_error:
+                            print(f"Error processing MCP content: {content_error}")
+                            content = [{"type": "error", "text": f"Error processing content: {str(content_error)}"}]
 
                         return {
                             "tool": tool_name,
@@ -226,7 +242,7 @@ class StdioMCPClient:
                             "content": content
                         }
                     else:
-                        # Fallback for other result formats
+                        # Fallback for results without content attribute
                         return {
                             "tool": tool_name,
                             "success": True,

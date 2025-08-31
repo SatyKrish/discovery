@@ -79,6 +79,16 @@ async def execute_tool_with_mcp(tool_name: str, args: Dict[str, Any]) -> Any:
             client = await mcp_client_manager.get_client(server_config_with_name)
             async with client:
                 result = await client.execute_tool(actual_tool_name, args)
+
+                # Log the result for debugging
+                activity.logger.info(f"MCP tool result type: {type(result)}")
+                if isinstance(result, dict):
+                    activity.logger.info(f"MCP tool result keys: {list(result.keys())}")
+                    if "content" in result:
+                        activity.logger.info(f"MCP tool content type: {type(result['content'])}")
+                        if isinstance(result["content"], list):
+                            activity.logger.info(f"MCP tool content length: {len(result['content'])}")
+
                 return result
         else:
             # Handle non-MCP tools (fallback for backward compatibility)
@@ -86,6 +96,7 @@ async def execute_tool_with_mcp(tool_name: str, args: Dict[str, Any]) -> Any:
 
     except Exception as e:
         error_msg = str(e).lower()
+        activity.logger.error(f"MCP tool execution error for {tool_name}: {str(e)}")
 
         # Check for specific error types and provide helpful fallbacks
         if "not found" in error_msg or "unknown tool" in error_msg:
@@ -94,17 +105,23 @@ async def execute_tool_with_mcp(tool_name: str, args: Dict[str, Any]) -> Any:
         # Provide helpful fallback suggestions based on tool name
         if "weather" in tool_name.lower():
             return {
+                "tool": tool_name,
+                "success": False,
                 "error": "Weather tool not available. Try using web-search for weather information.",
                 "suggestion": "Use web-search.web_search with query like 'weather in New York City'"
             }
         elif "flight" in tool_name.lower() or "find_flights" in tool_name.lower():
             return {
+                "tool": tool_name,
+                "success": False,
                 "error": "Flight search tool not available. Try using web-search for flight information.",
                 "suggestion": "Use web-search.web_search with query like 'flights from Paris to NYC'"
             }
         elif "search" in tool_name.lower():
             # For search-related tools, suggest using web-search
             return {
+                "tool": tool_name,
+                "success": False,
                 "error": f"Search tool '{tool_name}' failed. Try using web-search.web_search instead.",
                 "suggestion": f"Use web-search.web_search with your search query"
             }

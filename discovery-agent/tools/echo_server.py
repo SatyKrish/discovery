@@ -39,18 +39,24 @@ class EchoServer:
         @self.server.call_tool()
         async def echo(arguments: Dict[str, Any] = None) -> List[TextContent]:
             """Echo back the provided text."""
-            if arguments and "text" in arguments:
-                text = arguments["text"]
-                return [TextContent(type="text", text=f"Echo: {text}")]
-            return [TextContent(type="text", text="Echo: (no text provided)")]
+            try:
+                if arguments and "text" in arguments:
+                    text = str(arguments["text"])
+                    return [TextContent(type="text", text=f"Echo: {text}")]
+                return [TextContent(type="text", text="Echo: (no text provided)")]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Echo error: {str(e)}")]
 
         @self.server.call_tool()
         async def reverse_echo(arguments: Dict[str, Any] = None) -> List[TextContent]:
             """Echo back the provided text in reverse."""
-            if arguments and "text" in arguments:
-                text = arguments["text"]
-                return [TextContent(type="text", text=f"Reversed Echo: {text[::-1]}")]
-            return [TextContent(type="text", text="Reversed Echo: (no text provided)")]
+            try:
+                if arguments and "text" in arguments:
+                    text = str(arguments["text"])
+                    return [TextContent(type="text", text=f"Reversed Echo: {text[::-1]}")]
+                return [TextContent(type="text", text="Reversed Echo: (no text provided)")]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Reverse echo error: {str(e)}")]
 
         @self.server.list_tools()
         async def list_tools() -> List[Dict[str, Any]]:

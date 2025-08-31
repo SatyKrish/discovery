@@ -11,16 +11,28 @@ from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, Assista
 def format_tool_result_for_display(tool_name: str, result: Any) -> str:
     """Format tool results into human-readable text"""
     try:
-        if isinstance(result, str):
-            # Try to parse as JSON
-            parsed = json.loads(result)
-            return format_json_result(tool_name, parsed)
-        elif isinstance(result, dict):
-            return format_json_result(tool_name, result)
+        # Handle MCP tool results (already dict format)
+        if isinstance(result, dict):
+            # Check if this is an MCP tool result with content array
+            if "content" in result and isinstance(result["content"], list):
+                return format_mcp_content_result(tool_name, result)
+            else:
+                return format_json_result(tool_name, result)
+
+        # Handle string results (try to parse as JSON)
+        elif isinstance(result, str):
+            try:
+                parsed = json.loads(result)
+                return format_json_result(tool_name, parsed)
+            except json.JSONDecodeError:
+                return result
+
+        # Handle other types
         else:
             return str(result)
-    except (json.JSONDecodeError, TypeError):
-        return str(result)
+    except Exception as e:
+        # Fallback to string representation
+        return f"Tool result: {str(result)}"
 
 
 def format_json_result(tool_name: str, data: Dict[str, Any]) -> str:
@@ -71,6 +83,29 @@ def format_echo_result(data: Dict[str, Any]) -> str:
     """Format echo results"""
     text = data.get("text", "")
     return f"Echo: {text}"
+
+
+def format_mcp_content_result(tool_name: str, data: Dict[str, Any]) -> str:
+    """Format MCP tool results with content array"""
+    content_list = data.get("content", [])
+
+    if not content_list:
+        return f"Tool '{tool_name}' completed but returned no content."
+
+    # Extract text content from MCP result
+    text_parts = []
+    for item in content_list:
+        if isinstance(item, dict) and item.get("type") == "text":
+            text_parts.append(item.get("text", ""))
+        elif isinstance(item, str):
+            text_parts.append(item)
+
+    if text_parts:
+        combined_text = " ".join(text_parts)
+        return f"Tool '{tool_name}' result: {combined_text}"
+    else:
+        # Fallback for non-text content
+        return f"Tool '{tool_name}' completed with {len(content_list)} content items."
 
 @dataclass
 class State:

@@ -9,22 +9,34 @@ import os
 import json
 from typing import List, Dict, Any
 
-# Add the parent directory to the path so we can import base_server
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+    from mcp.types import TextContent
+    MCP_AVAILABLE = True
+except ImportError:
+    print("MCP package not found. Please install with: pip install mcp")
+    MCP_AVAILABLE = False
 
-from base_server import BaseMCPServer
 
-class WebSearchServer(BaseMCPServer):
+class WebSearchServer:
     """MCP Server for web search functionality"""
 
-    def __init__(self):
-        super().__init__("web-search-server", "1.0.0")
+    def __init__(self, server_name: str = "web-search-server", version: str = "1.0.0"):
+        if not MCP_AVAILABLE:
+            raise ImportError("MCP package is required for MCP servers")
+
+        self.server_name = server_name
+        self.version = version
+        self.server = Server(server_name, version)
+        self._setup_tools()
 
     def _setup_tools(self):
         """Setup the web search tools"""
 
+        # Web search tool
         @self.server.call_tool()
-        async def web_search(name: str, arguments: dict = None) -> Dict[str, Any]:
+        async def web_search(arguments: Dict[str, Any] = None) -> List[TextContent]:
             """Search the web for information."""
             if arguments and "query" in arguments:
                 query = arguments["query"]
@@ -33,17 +45,20 @@ class WebSearchServer(BaseMCPServer):
                 # Mock search results - in real implementation, this would call actual search APIs
                 mock_results = self._generate_mock_results(query, max_results)
 
-                return {
+                result_text = json.dumps({
                     "query": query,
                     "total_results": len(mock_results),
                     "results": mock_results,
                     "search_engine": "mock-search",
                     "timestamp": "2025-01-01T12:00:00Z"
-                }
-            return {"error": "Missing query parameter"}
+                }, indent=2)
 
+                return [TextContent(type="text", text=result_text)]
+            return [TextContent(type="text", text=json.dumps({"error": "Missing query parameter"}))]
+
+        # Search news tool
         @self.server.call_tool()
-        async def search_news(name: str, arguments: dict = None) -> Dict[str, Any]:
+        async def search_news(arguments: Dict[str, Any] = None) -> List[TextContent]:
             """Search for recent news articles."""
             if arguments and "query" in arguments:
                 query = arguments["query"]
@@ -51,18 +66,21 @@ class WebSearchServer(BaseMCPServer):
 
                 mock_news = self._generate_mock_news(query, days_back)
 
-                return {
+                result_text = json.dumps({
                     "query": query,
                     "days_back": days_back,
                     "total_results": len(mock_news),
                     "results": mock_news,
                     "source": "mock-news-api",
                     "timestamp": "2025-01-01T12:00:00Z"
-                }
-            return {"error": "Missing query parameter"}
+                }, indent=2)
 
+                return [TextContent(type="text", text=result_text)]
+            return [TextContent(type="text", text=json.dumps({"error": "Missing query parameter"}))]
+
+        # Search images tool
         @self.server.call_tool()
-        async def search_images(name: str, arguments: dict = None) -> Dict[str, Any]:
+        async def search_images(arguments: Dict[str, Any] = None) -> List[TextContent]:
             """Search for images related to the query."""
             if arguments and "query" in arguments:
                 query = arguments["query"]
@@ -70,17 +88,20 @@ class WebSearchServer(BaseMCPServer):
 
                 mock_images = self._generate_mock_images(query, max_results)
 
-                return {
+                result_text = json.dumps({
                     "query": query,
                     "total_results": len(mock_images),
                     "results": mock_images,
                     "source": "mock-image-search",
                     "timestamp": "2025-01-01T12:00:00Z"
-                }
-            return {"error": "Missing query parameter"}
+                }, indent=2)
 
+                return [TextContent(type="text", text=result_text)]
+            return [TextContent(type="text", text=json.dumps({"error": "Missing query parameter"}))]
+
+        # List tools handler
         @self.server.list_tools()
-        async def list_tools() -> list:
+        async def list_tools() -> List[Dict[str, Any]]:
             """List available tools"""
             return [
                 {
@@ -197,6 +218,24 @@ class WebSearchServer(BaseMCPServer):
                 "format": "jpg"
             }
         ][:max_results]
+
+    async def run_stdio(self):
+        """Run the MCP server using stdio transport"""
+        try:
+            print(f"Starting MCP server: {self.server_name} v{self.version}")
+            async with stdio_server() as (read_stream, write_stream):
+                await self.server.run(
+                    read_stream,
+                    write_stream,
+                    self.server.create_initialization_options()
+                )
+        except Exception as e:
+            print(f"Error running MCP server {self.server_name}: {e}")
+            raise
+
+    def run(self):
+        """Entry point for running the server"""
+        asyncio.run(self.run_stdio())
 
 
 def main():

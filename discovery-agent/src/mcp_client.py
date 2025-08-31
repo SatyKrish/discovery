@@ -4,82 +4,83 @@ import json
 import time
 import os
 import subprocess
-import signal
 from typing import Dict, List, Any, Optional
-import httpx
-from src.models import MCPServer, ToolOrchestrator, ToolSpec
-from src.config import settings
+from contextlib import asynccontextmanager
+
+# Import MCP client libraries
+try:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    MCP_AVAILABLE = True
+except ImportError:
+    # Fallback if MCP not installed
+    ClientSession = None
+    StdioServerParameters = None
+    stdio_client = None
+    MCP_AVAILABLE = False
 
 
-class MCPClient:
-    """Client for connecting to MCP (Model Context Protocol) servers"""
+class MCPClientManager:
+    """Manages MCP server connections with pooling"""
 
-    def __init__(self, server_config: Dict[str, Any]):
-        self.name = server_config.get("name", "unknown")
-        self.url = server_config.get("url", "")
-        self.capabilities = server_config.get("capabilities", [])
-        self.timeout = server_config.get("timeout", 30.0)
-        self._client: Optional[httpx.AsyncClient] = None
+    def __init__(self):
+        self.clients: Dict[str, 'StdioMCPClient'] = {}
+        self.server_health: Dict[str, Dict[str, Any]] = {}
 
-    async def __aenter__(self):
-        self._client = httpx.AsyncClient(timeout=self.timeout)
-        return self
+    def add_server(self, name: str, config: Dict[str, Any]):
+        """Add an MCP server configuration"""
+        self.clients[name] = StdioMCPClient(config)
+        self.server_health[name] = {
+            "status": "unknown",
+            "last_check": 0,
+            "tool_count": 0
+        }
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._client:
-            await self._client.aclose()
+    async def get_client(self, server_definition: Dict[str, Any]) -> 'StdioMCPClient':
+        """Get a pooled client for the server"""
+        server_name = server_definition.get("name", "unknown")
+        if server_name not in self.clients:
+            self.add_server(server_name, server_definition)
+        return self.clients[server_name]
 
-    async def connect(self) -> bool:
-        """Test connection to MCP server"""
-        if not self._client:
-            return False
+    async def discover_all_tools(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Discover tools from all connected MCP servers"""
+        all_tools = {}
 
-        try:
-            response = await self._client.get(f"{self.url}/health")
-            return response.status_code == 200
-        except Exception:
-            return False
+        for server_name, client in self.clients.items():
+            try:
+                tools = await client.discover_tools()
+                if tools:
+                    all_tools[server_name] = tools
+                    self.server_health[server_name] = {
+                        "status": "healthy",
+                        "last_check": time.time(),
+                        "tool_count": len(tools)
+                    }
+                else:
+                    self.server_health[server_name] = {
+                        "status": "unhealthy",
+                        "last_check": time.time(),
+                        "tool_count": 0,
+                        "error": "No tools discovered"
+                    }
+            except Exception as e:
+                self.server_health[server_name] = {
+                    "status": "error",
+                    "last_check": time.time(),
+                    "tool_count": 0,
+                    "error": str(e)
+                }
 
-    async def discover_tools(self) -> List[Dict[str, Any]]:
-        """Discover available tools from MCP server"""
-        if not self._client:
-            return []
+        return all_tools
 
-        try:
-            response = await self._client.get(f"{self.url}/tools")
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("tools", [])
-            return []
-        except Exception:
-            return []
-
-    async def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a tool on the MCP server"""
-        if not self._client:
-            raise Exception("MCP client not connected")
-
-        try:
-            payload = {
-                "tool": tool_name,
-                "arguments": args
-            }
-            response = await self._client.post(
-                f"{self.url}/execute",
-                json=payload,
-                headers={"Content-Type": "application/json"}
-            )
-
-            if response.status_code == 200:
-                return response.json()
-            else:
-                raise Exception(f"MCP server error: {response.status_code}")
-        except Exception as e:
-            raise Exception(f"Failed to execute tool {tool_name}: {str(e)}")
+    def get_health_metrics(self) -> Dict[str, Dict[str, Any]]:
+        """Get health metrics for all servers"""
+        return self.server_health.copy()
 
 
 class StdioMCPClient:
-    """Client for stdio-based MCP servers"""
+    """Client for stdio-based MCP servers with connection pooling"""
 
     def __init__(self, server_config: Dict[str, Any]):
         self.name = server_config.get("name", "unknown")
@@ -147,30 +148,95 @@ class StdioMCPClient:
 
     async def discover_tools(self) -> List[Dict[str, Any]]:
         """Discover available tools from stdio MCP server using proper MCP protocol"""
+        if not MCP_AVAILABLE:
+            print(f"MCP library not available for server {self.name}")
+            return []
+
         if not self._running or not self._process:
             return []
 
         try:
-            # Use proper MCP protocol communication
-            # For now, return empty list - tools should be defined in server implementations
-            # This will be populated when servers properly implement MCP protocol
-            return []
+            # Use MCP stdio client to communicate with the server
+            async with stdio_client(
+                StdioServerParameters(
+                    command=self.command,
+                    args=self.args,
+                    env={**os.environ, **self.env}
+                )
+            ) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as session:
+                    # Initialize the MCP session
+                    await session.initialize()
+
+                    # List available tools
+                    tools_response = await session.list_tools()
+                    tools = []
+
+                    for tool in tools_response.tools:
+                        tool_info = {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "inputSchema": tool.inputSchema
+                        }
+                        tools.append(tool_info)
+
+                    return tools
+
         except Exception as e:
             print(f"Error discovering tools from {self.name}: {e}")
             return []
 
     async def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a tool on the stdio MCP server using proper MCP protocol"""
+        if not MCP_AVAILABLE:
+            raise Exception(f"MCP library not available for server {self.name}")
+
         if not self._running or not self._process:
             raise Exception("MCP server not running")
 
         try:
-            # TODO: Implement proper MCP protocol communication via stdin/stdout
-            # For now, raise an exception indicating the server should handle this
-            raise Exception(f"MCP protocol communication not yet implemented for server '{self.name}'. Tool execution should be handled by the MCP server process.")
+            # Use MCP stdio client to communicate with the server
+            async with stdio_client(
+                StdioServerParameters(
+                    command=self.command,
+                    args=self.args,
+                    env={**os.environ, **self.env}
+                )
+            ) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as session:
+                    # Initialize the MCP session
+                    await session.initialize()
+
+                    # Call the tool
+                    result = await session.call_tool(tool_name, arguments=args)
+
+                    # Convert the result to a dictionary format
+                    if hasattr(result, 'content'):
+                        # Handle MCP result format
+                        content = []
+                        for item in result.content:
+                            if hasattr(item, 'text'):
+                                content.append({"type": "text", "text": item.text})
+                            elif hasattr(item, 'data'):
+                                content.append({"type": "data", "data": item.data})
+
+                        return {
+                            "tool": tool_name,
+                            "success": True,
+                            "content": content
+                        }
+                    else:
+                        # Fallback for other result formats
+                        return {
+                            "tool": tool_name,
+                            "success": True,
+                            "result": str(result)
+                        }
 
         except Exception as e:
-            raise Exception(f"Failed to execute tool {tool_name}: {str(e)}")
+            error_msg = f"Failed to execute tool {tool_name}: {str(e)}"
+            print(error_msg)
+            raise Exception(error_msg)
 
 
 class MCPManager:

@@ -10,7 +10,7 @@ from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.workflows.subagent import SubAgentWorkflow
 from src.activities.plan import plan_activity
 from src.activities.decision_agents import decision_agents_activity
-from src.activities.tool_dispatch import tool_dispatch
+from src.activities.tool_dispatch import tool_dispatch, discover_mcp_tools
 from src.activities.vfs import vfs_put
 from src.activities.summarize import summarize_activity
 from src.activities.transcript import append_transcript
@@ -73,6 +73,7 @@ async def main():
             plan_activity,
             decision_agents_activity,
             tool_dispatch,
+            discover_mcp_tools,
             vfs_put,
             summarize_activity,
             append_transcript,

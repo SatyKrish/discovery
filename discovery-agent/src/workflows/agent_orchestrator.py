@@ -200,6 +200,20 @@ class AgentOrchestratorWorkflow:
     @workflow.run
     async def run(self, goal: str):
         self.state.conversation_id = workflow.info().workflow_id
+
+        # Discover MCP tools at workflow start
+        tool_discovery_result = await workflow.execute_activity(
+            "discover_mcp_tools",
+            args=[],
+            start_to_close_timeout=timedelta(minutes=1),
+            retry_policy=RetryPolicy(maximum_attempts=2),
+        )
+
+        if tool_discovery_result.get("success"):
+            workflow.logger.info(f"Discovered {tool_discovery_result['total_tools']} tools from {tool_discovery_result['server_count']} MCP servers")
+        else:
+            workflow.logger.warning(f"MCP tool discovery failed: {tool_discovery_result.get('error', 'Unknown error')}")
+
         plan_data = await workflow.execute_activity(
             "plan_activity",
             args=[{"goal": goal}],

@@ -67,7 +67,7 @@ class BaseMCPServer(ABC):
             "input_schema": input_schema or {}
         }
 
-        # Register the tool with the MCP server
+        # Register the tool with the MCP server using the correct API
         @self.server.call_tool()
         async def tool_call(name=name, arguments=None):
             if name in self.tools:
@@ -78,6 +78,19 @@ class BaseMCPServer(ABC):
                     return handler(arguments or {})
             else:
                 raise ValueError(f"Unknown tool: {name}")
+
+        # Store the tool definition for list_tools
+        self._tool_definitions = getattr(self, '_tool_definitions', [])
+        self._tool_definitions.append({
+            "name": name,
+            "description": description,
+            "inputSchema": input_schema or {}
+        })
+
+    @abstractmethod
+    async def list_tools(self) -> List[Dict[str, Any]]:
+        """List available tools - must be implemented by subclasses"""
+        pass
 
     def _create_text_content(self, text: str) -> List[Dict[str, Any]]:
         """Helper to create MCP text content response"""

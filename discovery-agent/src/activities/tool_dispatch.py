@@ -1,8 +1,10 @@
 from __future__ import annotations
 from temporalio import activity
 from src.models import ToolCall, ToolResult
-from src.registry import execute_tool
+from src.mcp_client import MCPClientManager
+from src.mcp_config import config_loader
 from src.otel import get_tracer
+from typing import Dict, Any
 
 tracer = get_tracer(__name__)
 
@@ -13,6 +15,9 @@ class ToolNotFoundError(Exception):
 class ToolExecutionError(Exception):
     """Raised when tool execution fails"""
     pass
+
+# Global MCP client manager instance
+mcp_client_manager = MCPClientManager()
 
 @activity.defn
 async def tool_dispatch(call: ToolCall) -> ToolResult:
@@ -26,8 +31,8 @@ async def tool_dispatch(call: ToolCall) -> ToolResult:
         activity.logger.info(f"Starting tool dispatch for: {call.name} with args: {call.args}")
 
         try:
-            # Enhanced tool execution with better error handling
-            output = await execute_tool_with_fallback(call.name, call.args)
+            # Execute tool using MCP client manager
+            output = await execute_tool_with_mcp(call.name, call.args)
 
             activity.logger.info(f"Tool {call.name} executed successfully, output type: {type(output)}")
             if isinstance(output, dict):
@@ -54,11 +59,30 @@ async def tool_dispatch(call: ToolCall) -> ToolResult:
             span.record_exception(e)
             return ToolResult(id=call.id, ok=False, error=f"Unexpected error: {str(e)}")
 
-async def execute_tool_with_fallback(tool_name: str, args: dict) -> any:
-    """Execute tool with fallback logic for better error handling"""
+async def execute_tool_with_mcp(tool_name: str, args: Dict[str, Any]) -> Any:
+    """Execute tool using MCP client manager"""
     try:
-        from src.registry import execute_tool
-        return await execute_tool(tool_name, args)
+        # Check if it's an MCP tool (server.tool format)
+        if "." in tool_name:
+            server_name, actual_tool_name = tool_name.split(".", 1)
+
+            # Get server config
+            server_config = config_loader.get_server_config(server_name)
+            if not server_config:
+                raise ToolNotFoundError(f"MCP server '{server_name}' not configured")
+
+            # Add server name to config for client manager
+            server_config_with_name = server_config.copy()
+            server_config_with_name["name"] = server_name
+
+            # Get client and execute tool
+            client = await mcp_client_manager.get_client(server_config_with_name)
+            async with client:
+                result = await client.execute_tool(actual_tool_name, args)
+                return result
+        else:
+            # Handle non-MCP tools (fallback for backward compatibility)
+            raise ToolNotFoundError(f"Tool '{tool_name}' is not an MCP tool")
 
     except Exception as e:
         error_msg = str(e).lower()
@@ -87,3 +111,34 @@ async def execute_tool_with_fallback(tool_name: str, args: dict) -> any:
         else:
             # Generic fallback
             raise ToolExecutionError(f"Tool '{tool_name}' execution failed: {str(e)}")
+
+@activity.defn
+async def discover_mcp_tools() -> Dict[str, Any]:
+    """Activity to discover tools from all configured MCP servers"""
+    try:
+        # Load all server configs
+        server_configs = config_loader.get_all_expanded_configs()
+
+        # Add servers to client manager
+        for config in server_configs:
+            mcp_client_manager.add_server(config["name"], config)
+
+        # Discover tools from all servers
+        tools = await mcp_client_manager.discover_all_tools()
+
+        return {
+            "success": True,
+            "tools": tools,
+            "server_count": len(tools),
+            "total_tools": sum(len(server_tools) for server_tools in tools.values())
+        }
+
+    except Exception as e:
+        activity.logger.error(f"Error discovering MCP tools: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "tools": {},
+            "server_count": 0,
+            "total_tools": 0
+        }

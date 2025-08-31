@@ -5,14 +5,16 @@
       "command": "python",
       "args": ["tools/echo_server.py"],
       "env": {},
-      "description": "Simple echo tool for testing MCP functionality"
+      "description": "Simple echo tool for testing MCP functionality",
+      "timeout": 30.0
     },
     "calculator": {
       "type": "stdio",
       "command": "python",
       "args": ["tools/calculator_server.py"],
       "env": {},
-      "description": "Safe mathematical calculations and operations"
+      "description": "Safe mathematical calculations and operations",
+      "timeout": 30.0
     },
     "web-search": {
       "type": "stdio",
@@ -21,7 +23,8 @@
       "env": {
         "SEARCH_API_KEY": "${SEARCH_API_KEY:-}"
       },
-      "description": "Web search functionality (currently mock implementation)"
+      "description": "Web search functionality (currently mock implementation)",
+      "timeout": 30.0
     }
   }
 }

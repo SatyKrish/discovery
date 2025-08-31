@@ -93,7 +93,7 @@ class ToolSpec(BaseModel):
     name: str
     fn: Callable[[dict], Any]
     description: Optional[str] = None
-    schema: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for args")
+    input_schema: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for args")
 
 class ToolChainStep(BaseModel):
     tool_name: str

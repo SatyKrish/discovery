@@ -31,7 +31,7 @@ def _make_agent_tool(name: str, schema: Dict[str, Any], description: str) -> Fun
 def _collect_agent_tools() -> List[FunctionTool]:
     tools: List[FunctionTool] = []
     for spec in list_tool_specs():
-        tools.append(_make_agent_tool(spec.name, spec.schema or {}, spec.description or spec.name))
+        tools.append(_make_agent_tool(spec.name, spec.input_schema or {}, spec.description or spec.name))
     return tools
 
 @activity.defn

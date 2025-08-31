@@ -45,7 +45,7 @@ class ToolRegistry:
                     tool_spec = ToolSpec(
                         name=tool_name,
                         description=tool.get('description', ''),
-                        schema=tool.get('schema', {})
+                        input_schema=tool.get('input_schema', {})
                     )
                     all_tools[tool_name] = tool_spec
 

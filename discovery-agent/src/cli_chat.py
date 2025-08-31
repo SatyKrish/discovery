@@ -16,9 +16,6 @@ from typing import Any, Dict
 
 import requests
 
-# Suppress MCP pydantic warnings
-warnings.filterwarnings("ignore", message="Field name \"schema\" in \"ToolSpec\" shadows an attribute")
-
 
 def start_session(api: str, goal: str = "Have a helpful conversation") -> str:
     res = requests.post(f"{api}/sessions", json={"goal": goal})

@@ -6,15 +6,14 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
-# Import MCP client libraries
+# Import MCP client libraries (New API)
 try:
-    from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
+    from mcp.types import TextContent
 except ImportError:
     # Fallback if MCP not installed
-    ClientSession = None
-    StdioServerParameters = None
     stdio_client = None
+    TextContent = None
 
 
 class MCPClientManager:
@@ -53,6 +52,8 @@ class MCPClientManager:
                     args=connection.get("args", ["server.py"]),
                     env=connection.get("env", {}),
                 ) as (read, write):
+                    # Use the new MCP client session API
+                    from mcp import ClientSession
                     async with ClientSession(read, write) as session:
                         # Initialize the session
                         await session.initialize()
@@ -105,6 +106,8 @@ class MCPClientManager:
                     args=connection.get("args", ["server.py"]),
                     env=connection.get("env", {}),
                 ) as (read, write):
+                    # Use the new MCP client session API
+                    from mcp import ClientSession
                     async with ClientSession(read, write) as session:
                         # Initialize the session
                         await session.initialize()
@@ -171,7 +174,8 @@ class MCPClientManager:
         full_env = os.environ.copy()
         full_env.update(env)
 
-        # Create server parameters
+        # Create server parameters using new API
+        from mcp.client.stdio import StdioServerParameters
         server_params = StdioServerParameters(
             command=command,
             args=args,

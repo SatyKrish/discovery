@@ -203,8 +203,8 @@ class AgentOrchestratorWorkflow:
             start_to_close_timeout=timedelta(seconds=15),
             retry_policy=RetryPolicy(maximum_attempts=2),
         )
-        if self.state.gate_ok:
-            self.state.turns += 1
+        # Always increment turns - guardrail is advisory, not blocking
+        self.state.turns += 1
 
     @workflow.signal
     async def approve_tool(self, tool_call_id: str, approved: bool, edited_args: dict | None = None):

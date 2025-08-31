@@ -11,8 +11,8 @@ import time
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from src.mcp_client import mcp_client_manager
-from src.mcp_config import config_loader, load_mcp_servers_into_manager
+from src.mcp.core.client import mcp_client_manager
+from src.mcp.core.config import config_loader, load_mcp_servers_into_manager
 from src.workflows.agent_orchestrator import format_tool_result_for_display
 
 
@@ -75,7 +75,7 @@ async def test_clean_mcp_implementation():
             print(f"   Testing {description}...")
 
             # Import the tool_dispatch activity for testing
-            from src.activities.tool_dispatch import execute_mcp_tool
+            from src.mcp.core.tool_dispatch import execute_mcp_tool
             from src.models import ToolCall
 
             # Create a tool call
@@ -114,7 +114,7 @@ async def test_clean_mcp_implementation():
     try:
         # Test with invalid server
         try:
-            from src.activities.tool_dispatch import execute_mcp_tool
+            from src.mcp.core.tool_dispatch import execute_mcp_tool
             await execute_mcp_tool("nonexistent.echo", {"text": "test"})
             print("   ❌ Should have failed with nonexistent server")
         except Exception as e:
@@ -122,7 +122,7 @@ async def test_clean_mcp_implementation():
 
         # Test with invalid tool
         try:
-            from src.activities.tool_dispatch import execute_mcp_tool
+            from src.mcp.core.tool_dispatch import execute_mcp_tool
             await execute_mcp_tool("echo.nonexistent_tool", {"text": "test"})
             print("   ❌ Should have failed with nonexistent tool")
         except Exception as e:

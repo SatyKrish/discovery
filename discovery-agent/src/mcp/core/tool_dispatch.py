@@ -9,8 +9,8 @@ from temporalio import activity
 from temporalio.common import RetryPolicy
 
 from src.models import ToolCall, ToolResult, StructuredToolResult
-from src.mcp_client import mcp_client_manager
-from src.mcp_config import config_loader
+from src.mcp.core.client import mcp_client_manager
+from src.mcp.core.config import config_loader
 
 
 class ToolNotFoundError(Exception):

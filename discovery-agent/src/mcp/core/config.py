@@ -14,7 +14,7 @@ class MCPConfigLoader:
     def __init__(self, config_path: Optional[str] = None):
         if config_path is None:
             # Default to mcp-config.json in the project root
-            self.config_path = Path(__file__).parent.parent / "mcp-config.json"
+            self.config_path = Path(__file__).parent.parent.parent.parent / "mcp-config.json"
         else:
             self.config_path = Path(config_path)
 

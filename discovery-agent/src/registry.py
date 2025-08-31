@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional
 from src.models import ToolSpec
-from src.mcp_client import tool_orchestrator
-from src.mcp_config import config_loader
+from src.mcp.core.client import tool_orchestrator
+from src.mcp.core.config import config_loader
 
 class ToolRegistry:
     """Pure MCP-based tool registry - no static tool registration"""

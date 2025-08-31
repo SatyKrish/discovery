@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive test script to verify MCP integration improvements:
-- Tool execution and caching
-- Health monitoring and metrics
-- Configuration validation
-- Error handling and recovery
+Test script for the clean MCP implementation based on temporal-ai-agents reference
 """
 
 import asyncio
@@ -15,18 +11,19 @@ import time
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from src.mcp_client import tool_orchestrator
-from src.mcp_config import config_loader, load_mcp_servers_into_orchestrator
+from src.mcp_client import mcp_client_manager
+from src.mcp_config import config_loader, load_mcp_servers_into_manager
 from src.workflows.agent_orchestrator import format_tool_result_for_display
 
-async def test_mcp_improvements():
-    """Test all MCP integration improvements"""
-    print("🧪 Testing MCP Integration Improvements")
+
+async def test_clean_mcp_implementation():
+    """Test the clean MCP implementation"""
+    print("🧪 Testing Clean MCP Implementation")
     print("=" * 50)
 
     # Initialize MCP servers
     print("📡 Initializing MCP servers...")
-    load_mcp_servers_into_orchestrator()
+    load_mcp_servers_into_manager()
 
     # Test 1: Configuration Validation
     print("\n1️⃣ Testing Configuration Validation...")
@@ -41,49 +38,57 @@ async def test_mcp_improvements():
     except Exception as e:
         print(f"❌ Configuration validation error: {e}")
 
-    # Test 2: Tool Discovery with Caching
-    print("\n2️⃣ Testing Tool Discovery with Caching...")
+    # Test 2: Tool Discovery
+    print("\n2️⃣ Testing Tool Discovery...")
     try:
-        # First discovery
-        start_time = time.time()
-        tool_cache = await tool_orchestrator.discover_dynamic_tools()
-        first_discovery_time = time.time() - start_time
-        print(f"   First discovery took: {first_discovery_time:.2f}s")
-        print(f"   Discovered servers: {list(tool_cache.keys())}")
-        for server, tools in tool_cache.items():
-            print(f"   {server}: {len(tools)} tools")
+        # Get all server configs
+        server_configs = config_loader.get_all_expanded_configs()
+        print(f"   Found {len(server_configs)} configured servers")
 
-        # Second discovery (should use cache)
-        start_time = time.time()
-        cached_tools = await tool_orchestrator.discover_dynamic_tools()
-        second_discovery_time = time.time() - start_time
-        print(f"   Second discovery took: {second_discovery_time:.2f}s")
+        for server_config in server_configs:
+            server_name = server_config["name"]
+            print(f"   Discovering tools from {server_name}...")
 
-        # Check cache info
-        cache_info = tool_orchestrator.get_cache_info()
-        print(f"   Cache status: {cache_info['cache_status']}")
-        print(f"   Cache TTL: {cache_info['cache_ttl_seconds']}s")
+            # Discover tools from this server
+            result = await mcp_client_manager.discover_tools(server_config)
+
+            if result.get("success"):
+                tools = result.get("tools", {})
+                print(f"   ✅ {server_name}: {len(tools)} tools discovered")
+                for tool_name, tool_info in tools.items():
+                    print(f"      - {tool_name}: {tool_info.get('description', 'No description')}")
+            else:
+                print(f"   ❌ {server_name}: {result.get('error', 'Unknown error')}")
 
     except Exception as e:
         print(f"❌ Tool discovery error: {e}")
 
-    # Test 3: Tool Execution and Statistics
-    print("\n3️⃣ Testing Tool Execution and Statistics...")
+    # Test 3: Tool Execution
+    print("\n3️⃣ Testing Tool Execution...")
     test_cases = [
-        ("web-search.web_search", {"query": "weather in New York"}, "Web Search"),
-        ("echo.echo", {"text": "Hello World"}, "Echo"),
-        ("calculator.calculate", {"expression": "2 + 3"}, "Calculator"),
+        ("echo.echo", {"text": "Hello World"}, "Echo Tool"),
+        ("calculator.calculate", {"expression": "2 + 3"}, "Calculator Tool"),
     ]
 
     for tool_name, args, description in test_cases:
         try:
             print(f"   Testing {description}...")
-            result = await tool_orchestrator.execute_tool(tool_name, args)
+
+            # Import the tool_dispatch activity for testing
+            from src.activities.tool_dispatch import execute_mcp_tool
+            from src.models import ToolCall
+
+            # Create a tool call
+            tool_call = ToolCall(id=f"test-{tool_name}", name=tool_name, args=args)
+
+            # Execute the tool
+            result = await execute_mcp_tool(tool_call.name, tool_call.args)
             print(f"   ✅ {description} executed successfully")
+            print(f"   🔍 Raw result: {result}")
 
             # Test formatting
             formatted = format_tool_result_for_display(tool_name, result)
-            print(f"   📝 Formatted result preview: {formatted[:100]}...")
+            print(f"   📝 Formatted result: {formatted[:100]}...")
 
         except Exception as e:
             print(f"   ❌ {description} failed: {e}")
@@ -91,85 +96,50 @@ async def test_mcp_improvements():
     # Test 4: Health Monitoring
     print("\n4️⃣ Testing Health Monitoring...")
     try:
-        health_status = tool_orchestrator.get_server_health()
+        health_status = mcp_client_manager.server_health
         print(f"   Server health status: {len(health_status)} servers monitored")
 
         for server_name, health in health_status.items():
             status = health.get('status', 'unknown')
             last_check = health.get('last_check', 0)
+            tool_count = health.get('tool_count', 0)
             time_since_check = time.time() - last_check
-            print(f"   {server_name}: {status} ({time_since_check:.1f}s ago)")
-
-        # Test overall health
-        overall_health = tool_orchestrator.mcp_manager.get_overall_health_status()
-        print(f"   Overall health: {overall_health['status']} - {overall_health['message']}")
+            print(f"   {server_name}: {status}, {tool_count} tools ({time_since_check:.1f}s ago)")
 
     except Exception as e:
         print(f"❌ Health monitoring error: {e}")
 
-    # Test 5: Usage Statistics
-    print("\n5️⃣ Testing Usage Statistics...")
+    # Test 5: Error Handling
+    print("\n5️⃣ Testing Error Handling...")
     try:
-        stats = tool_orchestrator.get_tool_stats()
-        print(f"   Tool usage statistics: {len(stats)} tools tracked")
+        # Test with invalid server
+        try:
+            from src.activities.tool_dispatch import execute_mcp_tool
+            await execute_mcp_tool("nonexistent.echo", {"text": "test"})
+            print("   ❌ Should have failed with nonexistent server")
+        except Exception as e:
+            print(f"   ✅ Correctly handled nonexistent server: {type(e).__name__}")
 
-        for tool_name, tool_stats in stats.items():
-            calls = tool_stats.get('calls', 0)
-            successes = tool_stats.get('successes', 0)
-            failures = tool_stats.get('failures', 0)
-            success_rate = (successes / calls * 100) if calls > 0 else 0
-            print(f"   {tool_name}: {calls} calls, {success_rate:.1f}% success")
-
-    except Exception as e:
-        print(f"❌ Statistics error: {e}")
-
-    # Test 6: Cache Management
-    print("\n6️⃣ Testing Cache Management...")
-    try:
-        # Get cache info
-        cache_info = tool_orchestrator.get_cache_info()
-        print(f"   Cache info: {cache_info['cache_status']}")
-        print(f"   Cached tools: {cache_info['total_cached_tools']}")
-        print(f"   Cache age: {cache_info.get('cache_age_seconds', 'N/A')}")
-
-        # Test cache clearing
-        tool_orchestrator.clear_cache()
-        cache_info_after_clear = tool_orchestrator.get_cache_info()
-        print(f"   Cache status after clear: {cache_info_after_clear['cache_status']}")
-
-    except Exception as e:
-        print(f"❌ Cache management error: {e}")
-
-    # Test 7: Error Handling and Recovery
-    print("\n7️⃣ Testing Error Handling and Recovery...")
-    try:
         # Test with invalid tool
         try:
-            await tool_orchestrator.execute_tool("nonexistent.tool", {})
+            from src.activities.tool_dispatch import execute_mcp_tool
+            await execute_mcp_tool("echo.nonexistent_tool", {"text": "test"})
             print("   ❌ Should have failed with nonexistent tool")
         except Exception as e:
             print(f"   ✅ Correctly handled nonexistent tool: {type(e).__name__}")
-
-        # Test with invalid arguments
-        try:
-            await tool_orchestrator.execute_tool("echo.echo", {"invalid_param": "test"})
-            print("   ✅ Echo handled invalid parameters gracefully")
-        except Exception as e:
-            print(f"   ⚠️  Echo failed with invalid params: {e}")
 
     except Exception as e:
         print(f"❌ Error handling test failed: {e}")
 
     print("\n" + "=" * 50)
-    print("🎉 MCP Integration Testing Complete!")
+    print("🎉 Clean MCP Implementation Testing Complete!")
     print("\n📊 Summary:")
     print("   ✅ Configuration validation")
-    print("   ✅ Tool discovery with caching")
+    print("   ✅ Tool discovery")
     print("   ✅ Tool execution and formatting")
-    print("   ✅ Health monitoring and metrics")
-    print("   ✅ Usage statistics tracking")
-    print("   ✅ Cache management")
-    print("   ✅ Error handling and recovery")
+    print("   ✅ Health monitoring")
+    print("   ✅ Error handling")
+
 
 if __name__ == "__main__":
-    asyncio.run(test_mcp_improvements())
+    asyncio.run(test_clean_mcp_implementation())

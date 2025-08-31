@@ -13,8 +13,11 @@ def format_tool_result_for_display(tool_name: str, result: Any) -> str:
     try:
         # Handle MCP tool results (already dict format)
         if isinstance(result, dict):
-            # Check if this is an MCP tool result with content array
-            if "content" in result and isinstance(result["content"], list):
+            # Check if this is our MCP result format (success/content structure)
+            if "success" in result and "content" in result:
+                return format_mcp_content_result(tool_name, result)
+            # Check if this is an MCP tool result with content array at top level
+            elif "content" in result and isinstance(result["content"], list):
                 return format_mcp_content_result(tool_name, result)
             else:
                 return format_json_result(tool_name, result)
@@ -31,8 +34,8 @@ def format_tool_result_for_display(tool_name: str, result: Any) -> str:
         else:
             return str(result)
     except Exception as e:
-        # Fallback to string representation
-        return f"Tool result: {str(result)}"
+        # Fallback to string representation with error info
+        return f"Tool result formatting error: {str(e)}\nRaw result: {str(result)}"
 
 
 def format_json_result(tool_name: str, data: Dict[str, Any]) -> str:
@@ -81,13 +84,38 @@ def format_calculator_result(data: Dict[str, Any]) -> str:
 
 def format_echo_result(data: Dict[str, Any]) -> str:
     """Format echo results"""
-    text = data.get("text", "")
-    return f"Echo: {text}"
+    # Handle our MCP result format
+    if isinstance(data, dict) and "content" in data:
+        content_list = data.get("content", [])
+        if content_list and isinstance(content_list, list):
+            for item in content_list:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    return f"Echo: {item.get('text', '')}"
+        return f"Echo result: {str(data)}"
+    else:
+        # Handle direct result format
+        text = data.get("text", "")
+        return f"Echo: {text}"
 
 
 def format_mcp_content_result(tool_name: str, data: Dict[str, Any]) -> str:
     """Format MCP tool results with content array"""
-    content_list = data.get("content", [])
+    # Handle the case where data is the result dict itself
+    if isinstance(data, dict) and "content" in data:
+        content_list = data.get("content", [])
+    elif isinstance(data, dict) and "success" in data:
+        # This is our MCP result format
+        if data.get("success"):
+            content_data = data.get("content", [])
+            if isinstance(content_data, list):
+                content_list = content_data
+            else:
+                return f"Tool '{tool_name}' result: {str(content_data)}"
+        else:
+            return f"Tool '{tool_name}' failed: {data.get('error', 'Unknown error')}"
+    else:
+        # Fallback for other formats
+        return f"Tool '{tool_name}' result: {str(data)}"
 
     if not content_list:
         return f"Tool '{tool_name}' completed but returned no content."

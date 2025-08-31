@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
 """
-MCP Configuration Loader
-Loads MCP server configurations from mcp-config.json
+MCP Configuration Loader - Clean implementation based on temporal-ai-agents reference
 """
 
 import json
 import os
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+
 
 class MCPConfigLoader:
     """Loads and manages MCP server configurations"""
@@ -94,7 +93,10 @@ class MCPConfigLoader:
         """Get server config with environment variables expanded"""
         config = self.get_server_config(server_name)
         if config:
-            return self._expand_env_vars(config)
+            expanded_config = self._expand_env_vars(config)
+            # Ensure name is included
+            expanded_config["name"] = server_name
+            return expanded_config
         return None
 
     def get_all_expanded_configs(self) -> List[Dict[str, Any]]:
@@ -107,14 +109,14 @@ class MCPConfigLoader:
         self._load_config()
 
     def validate_config(self) -> List[str]:
-        """Validate the configuration and return any issues with comprehensive checks"""
+        """Validate the configuration and return any issues"""
         issues = []
 
         servers = self.get_servers()
 
         for server_name, server_config in servers.items():
             # Check required fields based on type
-            server_type = server_config.get("type", "streamable-http")
+            server_type = server_config.get("type", "stdio")
 
             if server_type == "stdio":
                 required_fields = ["command", "args"]
@@ -140,27 +142,8 @@ class MCPConfigLoader:
                         if not isinstance(arg, str):
                             issues.append(f"Server '{server_name}': arg[{i}] must be a string")
 
-                # Validate environment variables
-                env = server_config.get("env", {})
-                if env is not None and not isinstance(env, dict):
-                    issues.append(f"Server '{server_name}': env must be a dictionary or null")
-
-            elif server_type == "streamable-http":
-                if "url" not in server_config:
-                    issues.append(f"Server '{server_name}': missing required field 'url' for streamable-http type")
-
-                # Validate URL format
-                url = server_config.get("url")
-                if url:
-                    if not isinstance(url, str):
-                        issues.append(f"Server '{server_name}': url must be a string")
-                    elif not url.strip():
-                        issues.append(f"Server '{server_name}': url cannot be empty")
-                    elif not (url.startswith("http://") or url.startswith("https://")):
-                        issues.append(f"Server '{server_name}': url must start with http:// or https://")
-
             else:
-                issues.append(f"Server '{server_name}': unknown server type '{server_type}'. Supported types: stdio, streamable-http")
+                issues.append(f"Server '{server_name}': unknown server type '{server_type}'. Supported types: stdio")
 
             # Validate timeout
             timeout = server_config.get("timeout")
@@ -170,11 +153,6 @@ class MCPConfigLoader:
                 elif timeout <= 0:
                     issues.append(f"Server '{server_name}': timeout must be positive")
 
-            # Validate description
-            description = server_config.get("description")
-            if description is not None and not isinstance(description, str):
-                issues.append(f"Server '{server_name}': description must be a string")
-
         return issues
 
 
@@ -182,21 +160,23 @@ class MCPConfigLoader:
 config_loader = MCPConfigLoader()
 
 
-def load_mcp_servers_into_orchestrator():
-    """Load all MCP servers from config into the global orchestrator"""
+def load_mcp_servers_into_manager():
+    """Load all MCP servers from config into the global MCP client manager"""
     try:
-        from .mcp_client import tool_orchestrator
+        from .mcp_client import mcp_client_manager
 
         # Clear existing servers
-        tool_orchestrator.mcp_manager.servers.clear()
+        mcp_client_manager.clients.clear()
+        mcp_client_manager.server_health.clear()
 
         # Load servers from config
         configs = config_loader.get_all_expanded_configs()
 
         for config in configs:
             server_name = config["name"]
-            tool_orchestrator.add_mcp_server(server_name, config)
-            print(f"Loaded MCP server: {server_name} ({config.get('type', 'streamable-http')})")
+            mcp_client_manager.add_server(server_name, config)
+            print(f"Loaded MCP server: {server_name} ({config.get('type', 'stdio')})")
+
     except ImportError:
         # Skip loading if running as standalone script
         pass
@@ -204,4 +184,4 @@ def load_mcp_servers_into_orchestrator():
 
 # Auto-load servers when module is imported (but not when run as script)
 if __name__ != "__main__":
-    load_mcp_servers_into_orchestrator()
+    load_mcp_servers_into_manager()

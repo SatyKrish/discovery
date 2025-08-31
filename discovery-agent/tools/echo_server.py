@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import TextContent
+    from mcp.types import TextContent, Tool
     MCP_AVAILABLE = True
 except ImportError:
     print("MCP package not found. Please install with: pip install mcp")
@@ -31,60 +31,60 @@ class EchoServer:
         self.server_name = server_name
         self.version = version
         self.server = Server(server_name, version)
-        self._setup_tools()
+        self._setup_handlers()
 
-    def _setup_tools(self):
-        """Setup the echo tools"""
-
-        @self.server.call_tool()
-        async def echo(arguments: Dict[str, Any] = None) -> List[TextContent]:
-            """Echo back the provided text."""
-            try:
-                if arguments and "text" in arguments:
-                    text = str(arguments["text"])
-                    return [TextContent(type="text", text=f"Echo: {text}")]
-                return [TextContent(type="text", text="Echo: (no text provided)")]
-            except Exception as e:
-                return [TextContent(type="text", text=f"Echo error: {str(e)}")]
-
-        @self.server.call_tool()
-        async def reverse_echo(arguments: Dict[str, Any] = None) -> List[TextContent]:
-            """Echo back the provided text in reverse."""
-            try:
-                if arguments and "text" in arguments:
-                    text = str(arguments["text"])
-                    return [TextContent(type="text", text=f"Reversed Echo: {text[::-1]}")]
-                return [TextContent(type="text", text="Reversed Echo: (no text provided)")]
-            except Exception as e:
-                return [TextContent(type="text", text=f"Reverse echo error: {str(e)}")]
+    def _setup_handlers(self):
+        """Setup the MCP handlers"""
 
         @self.server.list_tools()
-        async def list_tools() -> List[Dict[str, Any]]:
+        async def list_tools() -> List[Tool]:
             """List available tools"""
             return [
-                {
-                    "name": "echo",
-                    "description": "Echo back the provided text",
-                    "inputSchema": {
+                Tool(
+                    name="echo",
+                    description="Echo back the provided text",
+                    inputSchema={
                         "type": "object",
                         "properties": {
                             "text": {"type": "string", "description": "Text to echo back"}
                         },
                         "required": ["text"]
                     }
-                },
-                {
-                    "name": "reverse_echo",
-                    "description": "Echo back the provided text in reverse",
-                    "inputSchema": {
+                ),
+                Tool(
+                    name="reverse_echo",
+                    description="Echo back the provided text in reverse",
+                    inputSchema={
                         "type": "object",
                         "properties": {
                             "text": {"type": "string", "description": "Text to reverse and echo back"}
                         },
                         "required": ["text"]
                     }
-                }
+                )
             ]
+
+        @self.server.call_tool()
+        async def call_tool(name: str, arguments: Dict[str, Any] = None) -> List[TextContent]:
+            """Handle tool calls"""
+            try:
+                if name == "echo":
+                    if arguments and "text" in arguments:
+                        text = str(arguments["text"])
+                        return [TextContent(type="text", text=f"Echo: {text}")]
+                    return [TextContent(type="text", text="Echo: (no text provided)")]
+
+                elif name == "reverse_echo":
+                    if arguments and "text" in arguments:
+                        text = str(arguments["text"])
+                        return [TextContent(type="text", text=f"Reversed Echo: {text[::-1]}")]
+                    return [TextContent(type="text", text="Reversed Echo: (no text provided)")]
+
+                else:
+                    return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+            except Exception as e:
+                return [TextContent(type="text", text=f"Tool error: {str(e)}")]
 
     async def run_stdio(self):
         """Run the MCP server using stdio transport"""

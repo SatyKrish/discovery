@@ -1,7 +1,8 @@
 from __future__ import annotations
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Deque
 import json
 from temporalio import workflow
 from temporalio.common import RetryPolicy
@@ -146,7 +147,7 @@ class State:
     pending_tool_call: ToolCall | None = None
     gate_ok: bool = True
     done: bool = False
-    last_processed_turn: int = 0
+    prompt_queue: Deque[str] = field(default_factory=deque)
     last_response_id: str = ""  # OpenAI Responses API state management
     memory: ConversationMemory = field(default_factory=ConversationMemory)
 
@@ -203,6 +204,8 @@ class AgentOrchestratorWorkflow:
             start_to_close_timeout=timedelta(seconds=15),
             retry_policy=RetryPolicy(maximum_attempts=2),
         )
+        # Add message to prompt queue for individual processing
+        self.state.prompt_queue.append(msg.content)
         # Always increment turns - guardrail is advisory, not blocking
         self.state.turns += 1
 
@@ -217,8 +220,6 @@ class AgentOrchestratorWorkflow:
     async def end_conversation(self):
         """Signal to end the conversation and terminate the workflow"""
         self.state.done = True
-        # Force exit from any wait conditions by ensuring turns are processed
-        self.state.last_processed_turn = max(self.state.last_processed_turn, self.state.turns)
 
     @workflow.query
     def get_status(self) -> StatusView:
@@ -335,111 +336,105 @@ class AgentOrchestratorWorkflow:
         self.state.plan = [PlanItem(**it) if isinstance(it, dict) else it for it in plan_data]
 
         while not self.state.done:
-            # Wait for new messages to process, but also check if we should exit due to end signal
-            # Add timeout to prevent indefinite waiting (Temporal best practice)
-            try:
-                await workflow.wait_condition(
-                    lambda: (self.state.last_processed_turn < self.state.turns) and not self.state.done,
-                    timeout=timedelta(minutes=5)  # Timeout after 5 minutes of inactivity
-                )
-            except TimeoutError:
-                # If we timeout due to inactivity, terminate the workflow
-                if not self.state.done:
-                    self.state.done = True
-                    break
-
-            action_dict: dict = await workflow.execute_activity(
-                "decision_agents_activity",
-                args=[self.state.view_for_llm()],
-                start_to_close_timeout=timedelta(minutes=2),
-                retry_policy=RetryPolicy(maximum_attempts=3),
+            # Wait for messages in queue or end signal (aligned with reference implementation)
+            await workflow.wait_condition(
+                lambda: bool(self.state.prompt_queue) or self.state.done
             )
-            action: AssistantAction = AssistantAction(**action_dict)
 
-            # Update last_response_id from OpenAI Responses API
-            if "last_response_id" in action_dict:
-                self.state.last_response_id = action_dict["last_response_id"]
+            # Exit if conversation ended
+            if self.state.done:
+                break
 
-            if action.type == "assistant_message":
-                if action.message:
-                    self.state.memory.short_term.append(action.message)
-                    # Maintain memory size limit
-                    if len(self.state.memory.short_term) > 50:
-                        self.state.memory.short_term = self.state.memory.short_term[-50:]
-                self.state.last_processed_turn = self.state.turns
-            elif action.type == "revise_plan" and action.plan_diff:
-                self.state.plan = action.plan_diff
-                self.state.last_processed_turn = self.state.turns
-            elif action.type == "tool_call" and action.call:
-                call = action.call
-                if call.requires_approval:
-                    self.state.pending_tool_call = call
-                    await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
+            # Process messages individually from queue (like reference implementation)
+            if self.state.prompt_queue:
+                # Get next message from queue
+                current_prompt = self.state.prompt_queue.popleft()
+                workflow.logger.info(f"Processing message from queue: {current_prompt[:50]}...")
 
-                tool_result_raw = await workflow.execute_activity(
-                    "tool_dispatch",
-                    args=[call],
-                    heartbeat_timeout=timedelta(seconds=30),
-                    start_to_close_timeout=timedelta(minutes=10),
-                    retry_policy=RetryPolicy(maximum_attempts=3),
-                )
-
-                # Convert dict back to StructuredToolResult (Temporal deserializes Pydantic models as dicts)
-                if isinstance(tool_result_raw, dict):
-                    tool_result = StructuredToolResult(**tool_result_raw)
-                else:
-                    tool_result = tool_result_raw
-
-                # Create response envelope for the tool result
-                response_envelope = response_formatter.create_tool_response(tool_result)
-                response_envelope.timestamp = workflow.now().timestamp()
-
-                # Store tool result in conversation for context
-                if tool_result.success:
-                    # Format the result for human-readable display
-                    formatted_result = response_formatter.format_tool_result(tool_result)
-
-                    tool_result_message = Message(
-                        role="assistant",
-                        content=formatted_result,
-                        ts=workflow.now().timestamp()
-                    )
-                    self.state.memory.short_term.append(tool_result_message)
-                else:
-                    # Handle tool failure
-                    error_message = Message(
-                        role="assistant",
-                        content=f"Tool '{call.name}' failed: {tool_result.error}",
-                        ts=workflow.now().timestamp()
-                    )
-                    self.state.memory.short_term.append(error_message)
-
-                # Generate response based on tool results
-                response_action_dict: dict = await workflow.execute_activity(
+                # Call decision agent for this specific message
+                action_dict: dict = await workflow.execute_activity(
                     "decision_agents_activity",
                     args=[self.state.view_for_llm()],
                     start_to_close_timeout=timedelta(minutes=2),
                     retry_policy=RetryPolicy(maximum_attempts=3),
                 )
-                response_action: AssistantAction = AssistantAction(**response_action_dict)
+                action: AssistantAction = AssistantAction(**action_dict)
 
-                # Process the response action
-                if response_action.type == "assistant_message" and response_action.message:
-                    self.state.memory.short_term.append(response_action.message)
-                    # Maintain memory size limit
-                    if len(self.state.memory.short_term) > 50:
-                        self.state.memory.short_term = self.state.memory.short_term[-50:]
+                # Update last_response_id from OpenAI Responses API
+                if "last_response_id" in action_dict:
+                    self.state.last_response_id = action_dict["last_response_id"]
 
-                    # Update processing state so status query returns output_text
-                    self.state.last_processed_turn = self.state.turns
-                    workflow.logger.info(f"Tool result processed, updated last_processed_turn to: {self.state.last_processed_turn}")
-                else:
-                    # If no assistant message was generated, still update the turn
-                    self.state.last_processed_turn = self.state.turns
-                    workflow.logger.info(f"No assistant message generated, still updated last_processed_turn to: {self.state.last_processed_turn}")
-            elif action.type == "spawn_subagent":
-                self.state.last_processed_turn = self.state.turns
+                if action.type == "assistant_message":
+                    if action.message:
+                        self.state.memory.short_term.append(action.message)
+                        # Maintain memory size limit
+                        if len(self.state.memory.short_term) > 50:
+                            self.state.memory.short_term = self.state.memory.short_term[-50:]
+                elif action.type == "revise_plan" and action.plan_diff:
+                    self.state.plan = action.plan_diff
+                elif action.type == "tool_call" and action.call:
+                    call = action.call
+                    if call.requires_approval:
+                        self.state.pending_tool_call = call
+                        await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
 
+                    tool_result_raw = await workflow.execute_activity(
+                        "tool_dispatch",
+                        args=[call],
+                        heartbeat_timeout=timedelta(seconds=30),
+                        start_to_close_timeout=timedelta(minutes=10),
+                        retry_policy=RetryPolicy(maximum_attempts=3),
+                    )
+
+                    # Convert dict back to StructuredToolResult (Temporal deserializes Pydantic models as dicts)
+                    if isinstance(tool_result_raw, dict):
+                        tool_result = StructuredToolResult(**tool_result_raw)
+                    else:
+                        tool_result = tool_result_raw
+
+                    # Create response envelope for the tool result
+                    response_envelope = response_formatter.create_tool_response(tool_result)
+                    response_envelope.timestamp = workflow.now().timestamp()
+
+                    # Store tool result in conversation for context
+                    if tool_result.success:
+                        # Format the result for human-readable display
+                        formatted_result = response_formatter.format_tool_result(tool_result)
+
+                        tool_result_message = Message(
+                            role="assistant",
+                            content=formatted_result,
+                            ts=workflow.now().timestamp()
+                        )
+                        self.state.memory.short_term.append(tool_result_message)
+                    else:
+                        # Handle tool failure
+                        error_message = Message(
+                            role="assistant",
+                            content=f"Tool '{call.name}' failed: {tool_result.error}",
+                            ts=workflow.now().timestamp()
+                        )
+                        self.state.memory.short_term.append(error_message)
+
+                    # Generate response based on tool results
+                    response_action_dict: dict = await workflow.execute_activity(
+                        "decision_agents_activity",
+                        args=[self.state.view_for_llm()],
+                        start_to_close_timeout=timedelta(minutes=2),
+                        retry_policy=RetryPolicy(maximum_attempts=3),
+                    )
+                    response_action: AssistantAction = AssistantAction(**response_action_dict)
+
+                    # Process the response action
+                    if response_action.type == "assistant_message" and response_action.message:
+                        self.state.memory.short_term.append(response_action.message)
+                        # Maintain memory size limit
+                        if len(self.state.memory.short_term) > 50:
+                            self.state.memory.short_term = self.state.memory.short_term[-50:]
+                elif action.type == "spawn_subagent":
+                    pass  # Handle subagent spawning if needed
+
+            # Handle summarization and continue-as-new logic
             if self.state.should_summarize():
                 summary_result = await workflow.execute_activity(
                     "summarize_activity",

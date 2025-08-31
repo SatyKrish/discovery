@@ -54,7 +54,10 @@ async def decision_agents_activity(state_view: dict) -> dict:
                 "For assistant_message: Provide a natural, conversational response to the user.\n"
                 "For tool_call: Use the available tools and return JSON with tool details.\n"
                 "For other actions: Return the appropriate JSON structure.\n\n"
-                "If you need to call a tool, the tool will return _tool_request in its output."
+                "Available tools: echo.echo, calculator.calculate, web-search.web_search\n"
+                "Use proper tool names with server prefixes (e.g., 'web-search.web_search')\n"
+                "If you need to call a tool, return a JSON object with 'tool_call' and 'parameters' fields.\n"
+                "The tool will be executed immediately and results will be provided in the next response."
             ),
             tools=_collect_agent_tools(),
         )
@@ -82,8 +85,32 @@ async def decision_agents_activity(state_view: dict) -> dict:
                         "plan_diff": None,
                     }
 
-        # Otherwise, treat the final output as an assistant message
+        # Check for tool calls in final output (enhanced detection)
         content = str(getattr(run_result, "final_output", ""))
+
+        # Import handler here to avoid circular imports
+        from .tool_response_handler import tool_response_handler
+
+        tool_call = tool_response_handler.detect_tool_call(content)
+
+        if tool_call:
+            # Execute tool immediately
+            call_id = f"tc-{info.activity_id}"
+            result = await tool_response_handler.execute_tool_call(
+                call_id, tool_call["name"], tool_call["args"]
+            )
+
+            # Return formatted result to agent
+            formatted_result = tool_response_handler.format_result_for_agent(result)
+
+            return {
+                "type": "assistant_message",
+                "message": {
+                    "role": "assistant",
+                    "content": formatted_result,
+                    "ts": 0
+                }
+            }
 
         # Try to parse JSON output to extract the actual message
         try:

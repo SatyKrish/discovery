@@ -1,10 +1,76 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import List
+from typing import List, Dict, Any
+import json
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView, ConversationMemory, PlanningContext, SubGoal
+
+
+def format_tool_result_for_display(tool_name: str, result: Any) -> str:
+    """Format tool results into human-readable text"""
+    try:
+        if isinstance(result, str):
+            # Try to parse as JSON
+            parsed = json.loads(result)
+            return format_json_result(tool_name, parsed)
+        elif isinstance(result, dict):
+            return format_json_result(tool_name, result)
+        else:
+            return str(result)
+    except (json.JSONDecodeError, TypeError):
+        return str(result)
+
+
+def format_json_result(tool_name: str, data: Dict[str, Any]) -> str:
+    """Format specific tool JSON results into readable text"""
+    if tool_name == "web-search.web_search":
+        return format_web_search_result(data)
+    elif tool_name == "calculator.calculate":
+        return format_calculator_result(data)
+    elif tool_name == "echo.echo":
+        return format_echo_result(data)
+    # Add more tool-specific formatters as needed
+    else:
+        return json.dumps(data, indent=2)
+
+
+def format_web_search_result(data: Dict[str, Any]) -> str:
+    """Format web search results into readable text"""
+    query = data.get("query", "Unknown query")
+    total_results = data.get("total_results", 0)
+    results = data.get("results", [])
+
+    if not results:
+        return f"No results found for '{query}'."
+
+    response = f"Search results for '{query}':\n\n"
+    for i, result in enumerate(results[:5], 1):  # Limit to top 5
+        title = result.get("title", "No title")
+        url = result.get("url", "")
+        response += f"{i}. {title}\n"
+        if url:
+            response += f"   {url}\n"
+        response += "\n"
+
+    if total_results > 5:
+        response += f"... and {total_results - 5} more results."
+
+    return response
+
+
+def format_calculator_result(data: Dict[str, Any]) -> str:
+    """Format calculator results"""
+    expression = data.get("expression", "")
+    result = data.get("result", "")
+    return f"Calculation result: {expression} = {result}"
+
+
+def format_echo_result(data: Dict[str, Any]) -> str:
+    """Format echo results"""
+    text = data.get("text", "")
+    return f"Echo: {text}"
 
 @dataclass
 class State:
@@ -95,13 +161,30 @@ class AgentOrchestratorWorkflow:
         # Get the latest assistant message content from memory for the current turn
         output_text = None
 
-        # Only return output_text if we've processed the current turn
-        if self.state.last_processed_turn >= self.state.turns:
-            # Find the most recent assistant message that was generated for the current turn
+        # Find the most recent assistant message that was generated for the current turn
+        for msg in reversed(self.state.memory.short_term):
+            if msg.role == "assistant":
+                output_text = msg.content
+                break
+
+        # If no assistant message found but we have tool results, use the last tool result
+        if not output_text and self.state.memory.short_term:
+            last_msg = self.state.memory.short_term[-1]
+            if last_msg.role == "assistant":
+                output_text = last_msg.content
+
+        # Special handling for tool results - look for the most recent tool result message
+        if not output_text:
             for msg in reversed(self.state.memory.short_term):
-                if msg.role == "assistant":
+                if msg.role == "assistant" and "Tool '" in msg.content and "' completed successfully" in msg.content:
                     output_text = msg.content
                     break
+
+        # Debug logging for troubleshooting
+        if output_text:
+            workflow.logger.debug(f"Status query returning output_text: {output_text[:100]}...")
+        else:
+            workflow.logger.debug(f"Status query: no output_text found, turns={self.state.turns}, last_processed={self.state.last_processed_turn}")
 
         return StatusView(
             conversation_id=self.state.conversation_id,
@@ -178,15 +261,13 @@ class AgentOrchestratorWorkflow:
                 # Store tool result in conversation for context
                 if result and isinstance(result, dict) and result.get("output"):
                     output_data = result["output"]
-                    # Handle nested output structure
-                    if isinstance(output_data, dict):
-                        output_text = str(output_data)
-                    else:
-                        output_text = str(output_data)
+
+                    # Format the result for human-readable display
+                    formatted_result = format_tool_result_for_display(call.name, output_data)
 
                     tool_result_message = Message(
                         role="assistant",
-                        content=f"Tool '{call.name}' result: {output_text}",
+                        content=f"Tool '{call.name}' completed successfully.\n\n{formatted_result}",
                         ts=workflow.now().timestamp()
                     )
                     self.state.memory.short_term.append(tool_result_message)
@@ -207,7 +288,13 @@ class AgentOrchestratorWorkflow:
                     if len(self.state.memory.short_term) > 50:
                         self.state.memory.short_term = self.state.memory.short_term[-50:]
 
-                self.state.last_processed_turn = self.state.turns
+                    # Update processing state so status query returns output_text
+                    self.state.last_processed_turn = self.state.turns
+                    workflow.logger.info(f"Tool result processed, updated last_processed_turn to: {self.state.last_processed_turn}")
+                else:
+                    # If no assistant message was generated, still update the turn
+                    self.state.last_processed_turn = self.state.turns
+                    workflow.logger.info(f"No assistant message generated, still updated last_processed_turn to: {self.state.last_processed_turn}")
             elif action.type == "spawn_subagent":
                 self.state.last_processed_turn = self.state.turns
 

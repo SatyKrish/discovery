@@ -11,9 +11,13 @@ terminal. Press Ctrl+C to exit.
 import argparse
 import os
 import time
+import warnings
 from typing import Any, Dict
 
 import requests
+
+# Suppress MCP pydantic warnings
+warnings.filterwarnings("ignore", message="Field name \"schema\" in \"ToolSpec\" shadows an attribute")
 
 
 def start_session(api: str, goal: str = "Have a helpful conversation") -> str:
@@ -52,6 +56,55 @@ def end_chat(api: str, wid: str) -> None:
         print(f"Warning: Could not end conversation properly: {e}")
 
 
+def _is_final_response(output_text: str) -> bool:
+    """Check if the response indicates completion"""
+    if not output_text:
+        return False
+    # Check for completion indicators
+    completion_indicators = [
+        "conversation ended",
+        "chat ended",
+        "goodbye",
+        "farewell",
+        "completed successfully",
+        "tool completed",
+        "search results for",
+        "calculation result",
+        "echo:"
+    ]
+    return any(indicator in output_text.lower() for indicator in completion_indicators)
+
+
+def _is_processing_response(output_text: str) -> bool:
+    """Check if the response indicates processing is ongoing"""
+    if not output_text:
+        return False
+    # Check for processing indicators
+    processing_indicators = [
+        "generating",
+        "processing",
+        "thinking",
+        "working",
+        "calling a",
+        "calling tool",
+        "executing",
+        "running",
+        "tool '",
+        "completed successfully"  # This might be part of a processing message
+    ]
+
+    # Don't treat tool completion messages as processing
+    if "completed successfully" in output_text.lower() and any(indicator in output_text.lower() for indicator in [
+        "search results for",
+        "calculation result",
+        "echo:",
+        "no results found"
+    ]):
+        return False
+
+    return any(indicator in output_text.lower() for indicator in processing_indicators)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Chat CLI with Discovery Agent")
     parser.add_argument("--api", default=os.environ.get("DISCOVERY_API_URL", "http://localhost:8080"),
@@ -80,8 +133,18 @@ def main() -> None:
                     while True:
                         output_text = status.get("output_text")
                         if output_text:
-                            print(f"Agent: {output_text}")
-                            break
+                            # Enhanced response detection
+                            if _is_final_response(output_text):
+                                print(f"Agent: {output_text}")
+                                break
+                            elif _is_processing_response(output_text):
+                                # Continue polling for actual result
+                                pass
+                            else:
+                                # Normal response
+                                print(f"Agent: {output_text}")
+                                break
+
                         # Timeout after 30 seconds
                         if time.time() - response_start > 30:
                             print("Agent: (response timeout - no text available)")

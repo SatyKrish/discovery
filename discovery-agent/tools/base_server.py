@@ -50,13 +50,34 @@ class BaseMCPServer(ABC):
 
         self.server_name = server_name
         self.version = version
-        self.server = Server(server_name)
+        self.server = Server(server_name, version)
+        self.tools = {}
         self._setup_tools()
 
     @abstractmethod
     def _setup_tools(self):
         """Setup the tools for this MCP server. Must be implemented by subclasses."""
         pass
+
+    def add_tool(self, name: str, handler, description: str = "", input_schema: Dict[str, Any] = None):
+        """Add a tool to the server"""
+        self.tools[name] = {
+            "handler": handler,
+            "description": description,
+            "input_schema": input_schema or {}
+        }
+
+        # Register the tool with the MCP server
+        @self.server.call_tool()
+        async def tool_call(name=name, arguments=None):
+            if name in self.tools:
+                handler = self.tools[name]["handler"]
+                if asyncio.iscoroutinefunction(handler):
+                    return await handler(arguments or {})
+                else:
+                    return handler(arguments or {})
+            else:
+                raise ValueError(f"Unknown tool: {name}")
 
     def _create_text_content(self, text: str) -> List[Dict[str, Any]]:
         """Helper to create MCP text content response"""

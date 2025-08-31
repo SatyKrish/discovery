@@ -146,131 +146,28 @@ class StdioMCPClient:
         return self._running and self._process and self._process.poll() is None
 
     async def discover_tools(self) -> List[Dict[str, Any]]:
-        """Discover available tools from stdio MCP server"""
+        """Discover available tools from stdio MCP server using proper MCP protocol"""
         if not self._running or not self._process:
             return []
 
         try:
-            # For now, return mock tools based on server name
-            # In a real implementation, this would communicate with the MCP server
-            # to discover available tools via the MCP protocol
-            if self.name == "echo":
-                return [
-                    {
-                        "name": "echo",
-                        "description": "Echo back the provided text",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "text": {"type": "string", "description": "Text to echo back"}
-                            },
-                            "required": ["text"]
-                        }
-                    },
-                    {
-                        "name": "reverse_echo",
-                        "description": "Echo back the provided text in reverse",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "text": {"type": "string", "description": "Text to reverse and echo back"}
-                            },
-                            "required": ["text"]
-                        }
-                    }
-                ]
-            elif self.name == "calculator":
-                return [
-                    {
-                        "name": "calculate",
-                        "description": "Calculate mathematical expressions safely",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "expression": {"type": "string", "description": "Mathematical expression to evaluate"}
-                            },
-                            "required": ["expression"]
-                        }
-                    },
-                    {
-                        "name": "add",
-                        "description": "Add two numbers",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "a": {"type": "number", "description": "First number"},
-                                "b": {"type": "number", "description": "Second number"}
-                            },
-                            "required": ["a", "b"]
-                        }
-                    }
-                ]
-            elif self.name == "web-search":
-                return [
-                    {
-                        "name": "web_search",
-                        "description": "Search the web for information",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "query": {"type": "string", "description": "Search query"},
-                                "max_results": {"type": "integer", "description": "Maximum number of results", "default": 5}
-                            },
-                            "required": ["query"]
-                        }
-                    }
-                ]
+            # Use proper MCP protocol communication
+            # For now, return empty list - tools should be defined in server implementations
+            # This will be populated when servers properly implement MCP protocol
             return []
-        except Exception:
+        except Exception as e:
+            print(f"Error discovering tools from {self.name}: {e}")
             return []
 
     async def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a tool on the stdio MCP server"""
+        """Execute a tool on the stdio MCP server using proper MCP protocol"""
         if not self._running or not self._process:
             raise Exception("MCP server not running")
 
         try:
-            # For now, simulate tool execution based on server name and tool name
-            # In a real implementation, this would communicate with the MCP server
-            # via stdin/stdout using the MCP protocol
-
-            if self.name == "echo":
-                if tool_name == "echo":
-                    text = args.get("text", "")
-                    return {"result": f"Echo: {text}"}
-                elif tool_name == "reverse_echo":
-                    text = args.get("text", "")
-                    return {"result": f"Reversed Echo: {text[::-1]}"}
-
-            elif self.name == "calculator":
-                if tool_name == "calculate":
-                    expression = args.get("expression", "")
-                    # Safe evaluation (simplified for demo)
-                    if "+" in expression or "-" in expression or "*" in expression or "/" in expression:
-                        result = eval(expression, {"__builtins__": {}})
-                        return {"result": result}
-                    else:
-                        return {"result": "Invalid expression"}
-                elif tool_name == "add":
-                    a = args.get("a", 0)
-                    b = args.get("b", 0)
-                    return {"result": a + b}
-
-            elif self.name == "web-search":
-                if tool_name == "web_search":
-                    query = args.get("query", "")
-                    max_results = args.get("max_results", 5)
-                    return {
-                        "query": query,
-                        "total_results": min(3, max_results),
-                        "results": [
-                            {"title": f"Result 1 for {query}", "url": f"https://example.com/1"},
-                            {"title": f"Result 2 for {query}", "url": f"https://example.com/2"},
-                            {"title": f"Result 3 for {query}", "url": f"https://example.com/3"}
-                        ][:max_results]
-                    }
-
-            raise Exception(f"Unknown tool: {tool_name}")
+            # TODO: Implement proper MCP protocol communication via stdin/stdout
+            # For now, raise an exception indicating the server should handle this
+            raise Exception(f"MCP protocol communication not yet implemented for server '{self.name}'. Tool execution should be handled by the MCP server process.")
 
         except Exception as e:
             raise Exception(f"Failed to execute tool {tool_name}: {str(e)}")
@@ -330,17 +227,95 @@ class MCPManager:
             raise Exception(f"Unknown MCP server: {server_name}")
 
         client = self.servers[server_name]
-        async with client:
-            return await client.execute_tool(tool_name, args)
+
+        # Update health metrics before execution
+        if server_name in self.server_health:
+            self.server_health[server_name]["last_tool_execution"] = time.time()
+            self.server_health[server_name]["total_tool_calls"] = self.server_health[server_name].get("total_tool_calls", 0) + 1
+
+        try:
+            async with client:
+                result = await client.execute_tool(tool_name, args)
+
+            # Update success metrics
+            if server_name in self.server_health:
+                self.server_health[server_name]["successful_tool_calls"] = self.server_health[server_name].get("successful_tool_calls", 0) + 1
+                self.server_health[server_name]["last_success"] = time.time()
+                self.server_health[server_name]["status"] = "healthy"
+
+            return result
+
+        except Exception as e:
+            # Update failure metrics
+            if server_name in self.server_health:
+                self.server_health[server_name]["failed_tool_calls"] = self.server_health[server_name].get("failed_tool_calls", 0) + 1
+                self.server_health[server_name]["last_failure"] = time.time()
+                self.server_health[server_name]["last_error"] = str(e)
+                self.server_health[server_name]["status"] = "error"
+
+            raise e
+
+    def get_health_metrics(self) -> Dict[str, Dict[str, Any]]:
+        """Get comprehensive health metrics for all servers"""
+        current_time = time.time()
+        metrics = {}
+
+        for server_name, health_info in self.server_health.items():
+            last_check = health_info.get("last_check", 0)
+            time_since_check = current_time - last_check
+
+            # Calculate uptime percentage (simplified)
+            total_calls = health_info.get("total_tool_calls", 0)
+            successful_calls = health_info.get("successful_tool_calls", 0)
+
+            success_rate = (successful_calls / total_calls * 100) if total_calls > 0 else 0
+
+            metrics[server_name] = {
+                **health_info,
+                "time_since_last_check": time_since_check,
+                "success_rate": success_rate,
+                "is_stale": time_since_check > 300,  # Consider stale after 5 minutes
+            }
+
+        return metrics
+
+    def get_overall_health_status(self) -> Dict[str, Any]:
+        """Get overall health status across all servers"""
+        if not self.server_health:
+            return {"status": "unknown", "message": "No servers configured"}
+
+        metrics = self.get_health_metrics()
+        healthy_servers = sum(1 for m in metrics.values() if m.get("status") == "healthy")
+        total_servers = len(metrics)
+
+        if healthy_servers == total_servers:
+            status = "healthy"
+            message = f"All {total_servers} servers are healthy"
+        elif healthy_servers > 0:
+            status = "degraded"
+            message = f"{healthy_servers}/{total_servers} servers are healthy"
+        else:
+            status = "unhealthy"
+            message = f"All {total_servers} servers are unhealthy"
+
+        return {
+            "status": status,
+            "message": message,
+            "healthy_servers": healthy_servers,
+            "total_servers": total_servers,
+            "server_details": metrics
+        }
 
 
 class ToolOrchestratorService:
     """Orchestrates tool discovery and execution across static and dynamic tools"""
 
-    def __init__(self):
+    def __init__(self, cache_ttl_seconds: int = 300):  # 5 minutes default TTL
         self.static_tools: Dict[str, ToolSpec] = {}
         self.mcp_manager = MCPManager()
         self.tool_cache: Dict[str, Dict[str, Any]] = {}
+        self.cache_timestamps: Dict[str, float] = {}
+        self.cache_ttl_seconds = cache_ttl_seconds
         self.usage_stats: Dict[str, Dict[str, Any]] = {}
 
     def register_static_tool(self, name: str, tool_spec: ToolSpec):
@@ -352,8 +327,29 @@ class ToolOrchestratorService:
         self.mcp_manager.add_server(name, config)
 
     async def discover_dynamic_tools(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Discover tools from MCP servers"""
-        return await self.mcp_manager.discover_all_tools()
+        """Discover tools from MCP servers with caching"""
+        current_time = time.time()
+
+        # Check if cache is still valid
+        if self._is_cache_valid(current_time):
+            print(f"Using cached tool discovery results (age: {current_time - self.cache_timestamps.get('tools', 0):.1f}s)")
+            return self.tool_cache
+
+        # Cache is stale or empty, refresh it
+        print("Refreshing tool discovery cache...")
+        try:
+            tools = await self.mcp_manager.discover_all_tools()
+            self.tool_cache = tools
+            self.cache_timestamps['tools'] = current_time
+            print(f"Cached {sum(len(server_tools) for server_tools in tools.values())} tools from {len(tools)} servers")
+            return tools
+        except Exception as e:
+            print(f"Error refreshing tool cache: {e}")
+            # Return cached data if available, even if stale
+            if self.tool_cache:
+                print("Returning stale cache due to refresh error")
+                return self.tool_cache
+            raise
 
     def get_all_available_tools(self) -> Dict[str, ToolSpec]:
         """Get all available tools (static + dynamic)"""
@@ -441,6 +437,51 @@ class ToolOrchestratorService:
         except Exception as e:
             self.usage_stats[tool_name]["failures"] += 1
             raise e
+
+    def _is_cache_valid(self, current_time: float) -> bool:
+        """Check if the tool cache is still valid"""
+        cache_timestamp = self.cache_timestamps.get('tools')
+        if cache_timestamp is None:
+            return False  # No cache available
+
+        age_seconds = current_time - cache_timestamp
+        return age_seconds < self.cache_ttl_seconds
+
+    def clear_cache(self):
+        """Clear the tool cache"""
+        self.tool_cache.clear()
+        self.cache_timestamps.clear()
+        print("Tool cache cleared")
+
+    def get_cache_info(self) -> Dict[str, Any]:
+        """Get information about the current cache state"""
+        current_time = time.time()
+        cache_timestamp = self.cache_timestamps.get('tools')
+
+        if cache_timestamp is None:
+            return {
+                "cache_status": "empty",
+                "cached_servers": 0,
+                "total_cached_tools": 0,
+                "cache_age_seconds": None,
+                "cache_ttl_seconds": self.cache_ttl_seconds
+            }
+
+        age_seconds = current_time - cache_timestamp
+        total_tools = sum(len(tools) for tools in self.tool_cache.values())
+
+        return {
+            "cache_status": "valid" if self._is_cache_valid(current_time) else "stale",
+            "cached_servers": len(self.tool_cache),
+            "total_cached_tools": total_tools,
+            "cache_age_seconds": age_seconds,
+            "cache_ttl_seconds": self.cache_ttl_seconds,
+            "time_until_expiry": max(0, self.cache_ttl_seconds - age_seconds)
+        }
+
+    def get_server_health(self) -> Dict[str, Dict[str, Any]]:
+        """Get health status of all MCP servers"""
+        return self.mcp_manager.server_health.copy()
 
     def get_tool_stats(self) -> Dict[str, Dict[str, Any]]:
         """Get usage statistics for all tools"""

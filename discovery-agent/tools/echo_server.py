@@ -21,29 +21,49 @@ class EchoServer(BaseMCPServer):
     def _setup_tools(self):
         """Setup the echo tool"""
 
-        @self.server.tool()
-        async def echo(text: str) -> str:
-            """Echo back the provided text.
+        @self.server.call_tool()
+        async def echo(name: str, arguments: dict = None) -> str:
+            """Echo back the provided text."""
+            if arguments and "text" in arguments:
+                text = arguments["text"]
+                return f"Echo: {text}"
+            return "Echo: (no text provided)"
 
-            Args:
-                text: The text to echo back
+        @self.server.call_tool()
+        async def reverse_echo(name: str, arguments: dict = None) -> str:
+            """Echo back the provided text in reverse."""
+            if arguments and "text" in arguments:
+                text = arguments["text"]
+                return f"Reversed Echo: {text[::-1]}"
+            return "Reversed Echo: (no text provided)"
 
-            Returns:
-                The echoed text
-            """
-            return f"Echo: {text}"
-
-        @self.server.tool()
-        async def reverse_echo(text: str) -> str:
-            """Echo back the provided text in reverse.
-
-            Args:
-                text: The text to reverse and echo back
-
-            Returns:
-                The reversed echoed text
-            """
-            return f"Reversed Echo: {text[::-1]}"
+        @self.server.list_tools()
+        async def list_tools() -> list:
+            """List available tools"""
+            return [
+                {
+                    "name": "echo",
+                    "description": "Echo back the provided text",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string", "description": "Text to echo back"}
+                        },
+                        "required": ["text"]
+                    }
+                },
+                {
+                    "name": "reverse_echo",
+                    "description": "Echo back the provided text in reverse",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string", "description": "Text to reverse and echo back"}
+                        },
+                        "required": ["text"]
+                    }
+                }
+            ]
 
 
 def main():

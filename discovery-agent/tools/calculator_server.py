@@ -23,79 +23,113 @@ class CalculatorServer(BaseMCPServer):
     def _setup_tools(self):
         """Setup the calculator tools"""
 
-        @self.server.tool()
-        async def calculate(expression: str) -> Union[float, int, str]:
-            """Calculate mathematical expressions safely.
+        @self.server.call_tool()
+        async def calculate(name: str, arguments: dict = None) -> Union[float, int, str]:
+            """Calculate mathematical expressions safely."""
+            if arguments and "expression" in arguments:
+                expression = arguments["expression"]
+                try:
+                    # Use safe evaluation
+                    result = self._safe_eval_math(expression)
+                    return result
+                except Exception as e:
+                    return f"Error: {str(e)}"
+            return "Error: No expression provided"
 
-            Supports basic arithmetic operations: +, -, *, /, **
-            Also supports parentheses and mathematical constants like pi, e
+        @self.server.call_tool()
+        async def add(name: str, arguments: dict = None) -> float:
+            """Add two numbers."""
+            if arguments and "a" in arguments and "b" in arguments:
+                return arguments["a"] + arguments["b"]
+            return "Error: Missing arguments 'a' and/or 'b'"
 
-            Args:
-                expression: Mathematical expression to evaluate
+        @self.server.call_tool()
+        async def subtract(name: str, arguments: dict = None) -> float:
+            """Subtract second number from first."""
+            if arguments and "a" in arguments and "b" in arguments:
+                return arguments["a"] - arguments["b"]
+            return "Error: Missing arguments 'a' and/or 'b'"
 
-            Returns:
-                The result of the calculation or error message
-            """
-            try:
-                # Use safe evaluation
-                result = self._safe_eval_math(expression)
-                return result
-            except Exception as e:
-                return f"Error: {str(e)}"
+        @self.server.call_tool()
+        async def multiply(name: str, arguments: dict = None) -> float:
+            """Multiply two numbers."""
+            if arguments and "a" in arguments and "b" in arguments:
+                return arguments["a"] * arguments["b"]
+            return "Error: Missing arguments 'a' and/or 'b'"
 
-        @self.server.tool()
-        async def add(a: float, b: float) -> float:
-            """Add two numbers.
+        @self.server.call_tool()
+        async def divide(name: str, arguments: dict = None) -> Union[float, str]:
+            """Divide first number by second."""
+            if arguments and "a" in arguments and "b" in arguments:
+                if arguments["b"] == 0:
+                    return "Error: Division by zero"
+                return arguments["a"] / arguments["b"]
+            return "Error: Missing arguments 'a' and/or 'b'"
 
-            Args:
-                a: First number
-                b: Second number
-
-            Returns:
-                Sum of the two numbers
-            """
-            return a + b
-
-        @self.server.tool()
-        async def subtract(a: float, b: float) -> float:
-            """Subtract second number from first.
-
-            Args:
-                a: First number
-                b: Second number
-
-            Returns:
-                Difference of the two numbers
-            """
-            return a - b
-
-        @self.server.tool()
-        async def multiply(a: float, b: float) -> float:
-            """Multiply two numbers.
-
-            Args:
-                a: First number
-                b: Second number
-
-            Returns:
-                Product of the two numbers
-            """
-            return a * b
-
-        @self.server.tool()
-        async def divide(a: float, b: float) -> Union[float, str]:
-            """Divide first number by second.
-
-            Args:
-                a: First number
-                b: Second number
-
-            Returns:
-                Quotient of the division or error if dividing by zero
-            """
-            if b == 0:
-                return "Error: Division by zero"
-            return a / b
+        @self.server.list_tools()
+        async def list_tools() -> list:
+            """List available tools"""
+            return [
+                {
+                    "name": "calculate",
+                    "description": "Calculate mathematical expressions safely",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "expression": {"type": "string", "description": "Mathematical expression to evaluate"}
+                        },
+                        "required": ["expression"]
+                    }
+                },
+                {
+                    "name": "add",
+                    "description": "Add two numbers",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "number", "description": "First number"},
+                            "b": {"type": "number", "description": "Second number"}
+                        },
+                        "required": ["a", "b"]
+                    }
+                },
+                {
+                    "name": "subtract",
+                    "description": "Subtract second number from first",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "number", "description": "First number"},
+                            "b": {"type": "number", "description": "Second number"}
+                        },
+                        "required": ["a", "b"]
+                    }
+                },
+                {
+                    "name": "multiply",
+                    "description": "Multiply two numbers",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "number", "description": "First number"},
+                            "b": {"type": "number", "description": "Second number"}
+                        },
+                        "required": ["a", "b"]
+                    }
+                },
+                {
+                    "name": "divide",
+                    "description": "Divide first number by second",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "number", "description": "First number"},
+                            "b": {"type": "number", "description": "Second number"}
+                        },
+                        "required": ["a", "b"]
+                    }
+                }
+            ]
 
     def _safe_eval_math(self, expression: str) -> Union[float, int]:
         """Safely evaluate mathematical expressions"""

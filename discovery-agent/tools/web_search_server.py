@@ -23,73 +23,103 @@ class WebSearchServer(BaseMCPServer):
     def _setup_tools(self):
         """Setup the web search tools"""
 
-        @self.server.tool()
-        async def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
-            """Search the web for information.
+        @self.server.call_tool()
+        async def web_search(name: str, arguments: dict = None) -> Dict[str, Any]:
+            """Search the web for information."""
+            if arguments and "query" in arguments:
+                query = arguments["query"]
+                max_results = arguments.get("max_results", 5)
 
-            This is a mock implementation that returns simulated search results.
-            In a real implementation, this would connect to actual search APIs.
+                # Mock search results - in real implementation, this would call actual search APIs
+                mock_results = self._generate_mock_results(query, max_results)
 
-            Args:
-                query: The search query
-                max_results: Maximum number of results to return (default: 5)
+                return {
+                    "query": query,
+                    "total_results": len(mock_results),
+                    "results": mock_results,
+                    "search_engine": "mock-search",
+                    "timestamp": "2025-01-01T12:00:00Z"
+                }
+            return {"error": "Missing query parameter"}
 
-            Returns:
-                Dictionary containing search results
-            """
-            # Mock search results - in real implementation, this would call actual search APIs
-            mock_results = self._generate_mock_results(query, max_results)
+        @self.server.call_tool()
+        async def search_news(name: str, arguments: dict = None) -> Dict[str, Any]:
+            """Search for recent news articles."""
+            if arguments and "query" in arguments:
+                query = arguments["query"]
+                days_back = arguments.get("days_back", 7)
 
-            return {
-                "query": query,
-                "total_results": len(mock_results),
-                "results": mock_results,
-                "search_engine": "mock-search",
-                "timestamp": "2025-01-01T12:00:00Z"
-            }
+                mock_news = self._generate_mock_news(query, days_back)
 
-        @self.server.tool()
-        async def search_news(query: str, days_back: int = 7) -> Dict[str, Any]:
-            """Search for recent news articles.
+                return {
+                    "query": query,
+                    "days_back": days_back,
+                    "total_results": len(mock_news),
+                    "results": mock_news,
+                    "source": "mock-news-api",
+                    "timestamp": "2025-01-01T12:00:00Z"
+                }
+            return {"error": "Missing query parameter"}
 
-            Args:
-                query: The news search query
-                days_back: How many days back to search (default: 7)
+        @self.server.call_tool()
+        async def search_images(name: str, arguments: dict = None) -> Dict[str, Any]:
+            """Search for images related to the query."""
+            if arguments and "query" in arguments:
+                query = arguments["query"]
+                max_results = arguments.get("max_results", 10)
 
-            Returns:
-                Dictionary containing news search results
-            """
-            mock_news = self._generate_mock_news(query, days_back)
+                mock_images = self._generate_mock_images(query, max_results)
 
-            return {
-                "query": query,
-                "days_back": days_back,
-                "total_results": len(mock_news),
-                "results": mock_news,
-                "source": "mock-news-api",
-                "timestamp": "2025-01-01T12:00:00Z"
-            }
+                return {
+                    "query": query,
+                    "total_results": len(mock_images),
+                    "results": mock_images,
+                    "source": "mock-image-search",
+                    "timestamp": "2025-01-01T12:00:00Z"
+                }
+            return {"error": "Missing query parameter"}
 
-        @self.server.tool()
-        async def search_images(query: str, max_results: int = 10) -> Dict[str, Any]:
-            """Search for images related to the query.
-
-            Args:
-                query: The image search query
-                max_results: Maximum number of image results to return (default: 10)
-
-            Returns:
-                Dictionary containing image search results
-            """
-            mock_images = self._generate_mock_images(query, max_results)
-
-            return {
-                "query": query,
-                "total_results": len(mock_images),
-                "results": mock_images,
-                "source": "mock-image-search",
-                "timestamp": "2025-01-01T12:00:00Z"
-            }
+        @self.server.list_tools()
+        async def list_tools() -> list:
+            """List available tools"""
+            return [
+                {
+                    "name": "web_search",
+                    "description": "Search the web for information",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query"},
+                            "max_results": {"type": "integer", "description": "Maximum number of results", "default": 5}
+                        },
+                        "required": ["query"]
+                    }
+                },
+                {
+                    "name": "search_news",
+                    "description": "Search for recent news articles",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "News search query"},
+                            "days_back": {"type": "integer", "description": "How many days back to search", "default": 7}
+                        },
+                        "required": ["query"]
+                    }
+                },
+                {
+                    "name": "search_images",
+                    "description": "Search for images related to the query",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Image search query"},
+                            "max_results": {"type": "integer", "description": "Maximum number of results", "default": 10}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            ]
 
     def _generate_mock_results(self, query: str, max_results: int) -> List[Dict[str, Any]]:
         """Generate mock search results"""

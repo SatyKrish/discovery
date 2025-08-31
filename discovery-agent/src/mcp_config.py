@@ -107,7 +107,7 @@ class MCPConfigLoader:
         self._load_config()
 
     def validate_config(self) -> List[str]:
-        """Validate the configuration and return any issues"""
+        """Validate the configuration and return any issues with comprehensive checks"""
         issues = []
 
         servers = self.get_servers()
@@ -122,16 +122,58 @@ class MCPConfigLoader:
                     if field not in server_config:
                         issues.append(f"Server '{server_name}': missing required field '{field}' for stdio type")
 
-                # Validate command exists
+                # Validate command exists and is executable
                 command = server_config.get("command")
                 if command:
-                    # For now, just check if it's a string (could be extended to check if executable exists)
                     if not isinstance(command, str):
                         issues.append(f"Server '{server_name}': command must be a string")
+                    elif not command.strip():
+                        issues.append(f"Server '{server_name}': command cannot be empty")
+
+                # Validate args is a list
+                args = server_config.get("args", [])
+                if not isinstance(args, list):
+                    issues.append(f"Server '{server_name}': args must be a list")
+                else:
+                    # Check each arg is a string
+                    for i, arg in enumerate(args):
+                        if not isinstance(arg, str):
+                            issues.append(f"Server '{server_name}': arg[{i}] must be a string")
+
+                # Validate environment variables
+                env = server_config.get("env", {})
+                if env is not None and not isinstance(env, dict):
+                    issues.append(f"Server '{server_name}': env must be a dictionary or null")
 
             elif server_type == "streamable-http":
                 if "url" not in server_config:
                     issues.append(f"Server '{server_name}': missing required field 'url' for streamable-http type")
+
+                # Validate URL format
+                url = server_config.get("url")
+                if url:
+                    if not isinstance(url, str):
+                        issues.append(f"Server '{server_name}': url must be a string")
+                    elif not url.strip():
+                        issues.append(f"Server '{server_name}': url cannot be empty")
+                    elif not (url.startswith("http://") or url.startswith("https://")):
+                        issues.append(f"Server '{server_name}': url must start with http:// or https://")
+
+            else:
+                issues.append(f"Server '{server_name}': unknown server type '{server_type}'. Supported types: stdio, streamable-http")
+
+            # Validate timeout
+            timeout = server_config.get("timeout")
+            if timeout is not None:
+                if not isinstance(timeout, (int, float)):
+                    issues.append(f"Server '{server_name}': timeout must be a number")
+                elif timeout <= 0:
+                    issues.append(f"Server '{server_name}': timeout must be positive")
+
+            # Validate description
+            description = server_config.get("description")
+            if description is not None and not isinstance(description, str):
+                issues.append(f"Server '{server_name}': description must be a string")
 
         return issues
 

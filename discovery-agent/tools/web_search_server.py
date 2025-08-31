@@ -12,7 +12,7 @@ from typing import List, Dict, Any
 try:
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import TextContent
+    from mcp.types import TextContent, Tool
     MCP_AVAILABLE = True
 except ImportError:
     print("MCP package not found. Please install with: pip install mcp")
@@ -45,16 +45,22 @@ class WebSearchServer:
                 # Mock search results - in real implementation, this would call actual search APIs
                 mock_results = self._generate_mock_results(query, max_results)
 
-                result_text = json.dumps({
-                    "query": query,
-                    "total_results": len(mock_results),
-                    "results": mock_results,
-                    "search_engine": "mock-search",
-                    "timestamp": "2025-01-01T12:00:00Z"
-                }, indent=2)
-
-                return [TextContent(type="text", text=result_text)]
-            return [TextContent(type="text", text=json.dumps({"error": "Missing query parameter"}))]
+                return [TextContent(type="text", text=json.dumps({
+                    "tool": "web-search.web_search",
+                    "success": True,
+                    "content": {
+                        "query": query,
+                        "total_results": len(mock_results),
+                        "results": mock_results,
+                        "search_engine": "mock-search",
+                        "timestamp": "2025-01-01T12:00:00Z"
+                    }
+                }))]
+            return [TextContent(type="text", text=json.dumps({
+                "tool": "web-search.web_search",
+                "success": False,
+                "error": "Missing query parameter"
+            }))]
 
         # Search news tool
         @self.server.call_tool()
@@ -66,17 +72,23 @@ class WebSearchServer:
 
                 mock_news = self._generate_mock_news(query, days_back)
 
-                result_text = json.dumps({
-                    "query": query,
-                    "days_back": days_back,
-                    "total_results": len(mock_news),
-                    "results": mock_news,
-                    "source": "mock-news-api",
-                    "timestamp": "2025-01-01T12:00:00Z"
-                }, indent=2)
-
-                return [TextContent(type="text", text=result_text)]
-            return [TextContent(type="text", text=json.dumps({"error": "Missing query parameter"}))]
+                return [TextContent(type="text", text=json.dumps({
+                    "tool": "web-search.search_news",
+                    "success": True,
+                    "content": {
+                        "query": query,
+                        "days_back": days_back,
+                        "total_results": len(mock_news),
+                        "results": mock_news,
+                        "source": "mock-news-api",
+                        "timestamp": "2025-01-01T12:00:00Z"
+                    }
+                }))]
+            return [TextContent(type="text", text=json.dumps({
+                "tool": "web-search.search_news",
+                "success": False,
+                "error": "Missing query parameter"
+            }))]
 
         # Search images tool
         @self.server.call_tool()
@@ -88,26 +100,32 @@ class WebSearchServer:
 
                 mock_images = self._generate_mock_images(query, max_results)
 
-                result_text = json.dumps({
-                    "query": query,
-                    "total_results": len(mock_images),
-                    "results": mock_images,
-                    "source": "mock-image-search",
-                    "timestamp": "2025-01-01T12:00:00Z"
-                }, indent=2)
-
-                return [TextContent(type="text", text=result_text)]
-            return [TextContent(type="text", text=json.dumps({"error": "Missing query parameter"}))]
+                return [TextContent(type="text", text=json.dumps({
+                    "tool": "web-search.search_images",
+                    "success": True,
+                    "content": {
+                        "query": query,
+                        "total_results": len(mock_images),
+                        "results": mock_images,
+                        "source": "mock-image-search",
+                        "timestamp": "2025-01-01T12:00:00Z"
+                    }
+                }))]
+            return [TextContent(type="text", text=json.dumps({
+                "tool": "web-search.search_images",
+                "success": False,
+                "error": "Missing query parameter"
+            }))]
 
         # List tools handler
         @self.server.list_tools()
-        async def list_tools() -> List[Dict[str, Any]]:
+        async def list_tools() -> List[Tool]:
             """List available tools"""
             return [
-                {
-                    "name": "web_search",
-                    "description": "Search the web for information",
-                    "inputSchema": {
+                Tool(
+                    name="web_search",
+                    description="Search the web for information",
+                    inputSchema={
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "Search query"},
@@ -115,11 +133,11 @@ class WebSearchServer:
                         },
                         "required": ["query"]
                     }
-                },
-                {
-                    "name": "search_news",
-                    "description": "Search for recent news articles",
-                    "inputSchema": {
+                ),
+                Tool(
+                    name="search_news",
+                    description="Search for recent news articles",
+                    inputSchema={
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "News search query"},
@@ -127,11 +145,11 @@ class WebSearchServer:
                         },
                         "required": ["query"]
                     }
-                },
-                {
-                    "name": "search_images",
-                    "description": "Search for images related to the query",
-                    "inputSchema": {
+                ),
+                Tool(
+                    name="search_images",
+                    description="Search for images related to the query",
+                    inputSchema={
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "Image search query"},
@@ -139,7 +157,7 @@ class WebSearchServer:
                         },
                         "required": ["query"]
                     }
-                }
+                )
             ]
 
     def _generate_mock_results(self, query: str, max_results: int) -> List[Dict[str, Any]]:

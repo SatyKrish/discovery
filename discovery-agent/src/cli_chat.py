@@ -56,53 +56,83 @@ def end_chat(api: str, wid: str) -> None:
         print(f"Warning: Could not end conversation properly: {e}")
 
 
-def _is_final_response(output_text: str) -> bool:
+def _is_final_response(response_data: Dict[str, Any]) -> bool:
     """Check if the response indicates completion"""
-    if not output_text:
+    if not response_data or "response" not in response_data:
         return False
-    # Check for completion indicators
-    completion_indicators = [
-        "conversation ended",
-        "chat ended",
-        "goodbye",
-        "farewell",
-        "completed successfully",
-        "tool completed",
-        "search results for",
-        "calculation result",
-        "echo:"
-    ]
-    return any(indicator in output_text.lower() for indicator in completion_indicators)
+
+    response = response_data["response"]
+    if not response:
+        return False
+
+    # Check response type and status
+    response_type = response.get("type", "")
+    status = response.get("status", "")
+    client_hints = response.get("client_hints", {})
+
+    # Check for completion indicators in client hints
+    completion_indicator = client_hints.get("completion_indicator", "")
+
+    if completion_indicator in ["conversation_complete", "error"]:
+        return True
+
+    # Check for specific response types that indicate completion
+    if response_type == "completion" and status == "completed":
+        return True
+
+    # Check for tool completion without next actions
+    if response_type == "tool_result" and status == "success":
+        next_actions = client_hints.get("next_actions", [])
+        return len(next_actions) == 0
+
+    return False
 
 
-def _is_processing_response(output_text: str) -> bool:
+def _is_processing_response(response_data: Dict[str, Any]) -> bool:
     """Check if the response indicates processing is ongoing"""
-    if not output_text:
+    if not response_data or "response" not in response_data:
         return False
+
+    response = response_data["response"]
+    if not response:
+        return False
+
+    # Check response type and status
+    response_type = response.get("type", "")
+    status = response.get("status", "")
+    client_hints = response.get("client_hints", {})
+
     # Check for processing indicators
-    processing_indicators = [
-        "generating",
-        "processing",
-        "thinking",
-        "working",
-        "calling a",
-        "calling tool",
-        "executing",
-        "running",
-        "tool '",
-        "completed successfully"  # This might be part of a processing message
-    ]
+    if status == "pending":
+        return True
 
-    # Don't treat tool completion messages as processing
-    if "completed successfully" in output_text.lower() and any(indicator in output_text.lower() for indicator in [
-        "search results for",
-        "calculation result",
-        "echo:",
-        "no results found"
-    ]):
-        return False
+    if response_type == "status" and "waiting" in response.get("content", "").lower():
+        return True
 
-    return any(indicator in output_text.lower() for indicator in processing_indicators)
+    # Tool results with next actions are still processing
+    if response_type == "tool_result" and status == "success":
+        next_actions = client_hints.get("next_actions", [])
+        return len(next_actions) > 0
+
+    return False
+
+
+def _extract_response_content(response_data: Dict[str, Any]) -> str:
+    """Extract the display content from the response envelope"""
+    if not response_data or "response" not in response_data:
+        return ""
+
+    response = response_data["response"]
+    if not response:
+        return ""
+
+    content = response.get("content", "")
+
+    # For tool results, use the formatted display if available
+    if response.get("type") == "tool_result" and isinstance(content, dict):
+        return content.get("formatted_display", str(content))
+
+    return str(content)
 
 
 def main() -> None:
@@ -131,23 +161,23 @@ def main() -> None:
                     print("Agent: (generating response...)")
                     response_start = time.time()
                     while True:
-                        output_text = status.get("output_text")
-                        if output_text:
-                            # Enhanced response detection
-                            if _is_final_response(output_text):
-                                print(f"Agent: {output_text}")
+                        response_content = _extract_response_content(status)
+                        if response_content:
+                            # Enhanced response detection using new format
+                            if _is_final_response(status):
+                                print(f"Agent: {response_content}")
                                 break
-                            elif _is_processing_response(output_text):
+                            elif _is_processing_response(status):
                                 # Continue polling for actual result
                                 pass
                             else:
                                 # Normal response
-                                print(f"Agent: {output_text}")
+                                print(f"Agent: {response_content}")
                                 break
 
                         # Timeout after 30 seconds
                         if time.time() - response_start > 30:
-                            print("Agent: (response timeout - no text available)")
+                            print("Agent: (response timeout - no response available)")
                             break
                         time.sleep(0.5)
                         status = get_status(api, wid)

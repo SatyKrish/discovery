@@ -93,7 +93,27 @@ async def get_status(workflow_id: str):
     client = await get_client()
     handle = client.get_workflow_handle(workflow_id)
     status = await handle.query(AgentOrchestratorWorkflow.get_status)
+
+    # Convert StatusView to dict, handling ResponseEnvelope serialization
     try:
-        return status.model_dump()
+        status_dict = status.model_dump()
+
+        # Handle ResponseEnvelope serialization
+        if status.response:
+            status_dict["response"] = status.response.model_dump()
+        else:
+            status_dict["response"] = None
+
+        return status_dict
     except Exception:
-        return status
+        # Fallback for any serialization issues
+        return {
+            "conversation_id": getattr(status, "conversation_id", ""),
+            "plan": getattr(status, "plan", []),
+            "pending_tool_call": getattr(status, "pending_tool_call", None),
+            "turns": getattr(status, "turns", 0),
+            "artifacts": getattr(status, "artifacts", []),
+            "state": getattr(status, "state", "unknown"),
+            "response": None,
+            "memory_summary": getattr(status, "memory_summary", None),
+        }

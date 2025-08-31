@@ -157,6 +157,25 @@ class PerformanceAnalytics(BaseModel):
     common_patterns: List[str] = []
     improvement_suggestions: List[str] = []
 
+class ResponseEnvelope(BaseModel):
+    """Standardized response envelope for all agent responses"""
+    type: Literal["assistant_message", "tool_result", "error", "completion", "status"]
+    status: Literal["success", "error", "pending", "completed"]
+    content: Any
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    client_hints: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: Optional[float] = None
+
+class StructuredToolResult(BaseModel):
+    """Structured result from tool execution"""
+    tool_name: str
+    success: bool
+    data: Any = None
+    error: str = None
+    formatted_display: str = None
+    execution_time: float = None
+    next_actions: List[str] = Field(default_factory=list)
+
 class StatusView(BaseModel):
     conversation_id: str
     plan: List[PlanItem]
@@ -164,5 +183,5 @@ class StatusView(BaseModel):
     turns: int
     artifacts: List[FileRef] = []
     state: str = "running"
-    output_text: str | None = None
+    response: ResponseEnvelope | None = None
     memory_summary: str | None = None

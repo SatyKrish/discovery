@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from temporalio import activity
 from temporalio.common import RetryPolicy
 
-from src.models import ToolCall, ToolResult
+from src.models import ToolCall, ToolResult, StructuredToolResult
 from src.mcp_client import mcp_client_manager
 from src.mcp_config import config_loader
 
@@ -24,10 +24,13 @@ class ToolExecutionError(Exception):
 
 
 @activity.defn
-async def tool_dispatch(call: ToolCall) -> ToolResult:
+async def tool_dispatch(call: ToolCall) -> StructuredToolResult:
     """Execute a tool call using MCP or other mechanisms"""
     ai = activity.info()
     activity.logger.info(f"Starting tool dispatch for: {call.name} with args: {call.args}")
+
+    import time
+    start_time = time.time()
 
     try:
         # Check if this is an MCP tool (server.tool format)
@@ -37,24 +40,45 @@ async def tool_dispatch(call: ToolCall) -> ToolResult:
             # For now, non-MCP tools are not supported in this clean implementation
             raise ToolNotFoundError(f"Tool '{call.name}' is not an MCP tool")
 
+        execution_time = time.time() - start_time
         activity.logger.info(f"Tool {call.name} executed successfully")
-        return ToolResult(id=call.id, ok=True, output=result)
+
+        return StructuredToolResult(
+            tool_name=call.name,
+            success=True,
+            data=result,
+            execution_time=execution_time
+        )
 
     except ToolNotFoundError as e:
+        execution_time = time.time() - start_time
         activity.logger.error(f"Tool not found: {call.name}")
-        return ToolResult(
-            id=call.id,
-            ok=False,
-            error=f"Tool '{call.name}' not found. Available MCP servers: {list(config_loader.get_servers().keys())}"
+        return StructuredToolResult(
+            tool_name=call.name,
+            success=False,
+            error=f"Tool '{call.name}' not found. Available MCP servers: {list(config_loader.get_servers().keys())}",
+            execution_time=execution_time
         )
 
     except ToolExecutionError as e:
+        execution_time = time.time() - start_time
         activity.logger.error(f"Tool execution error for {call.name}: {str(e)}")
-        return ToolResult(id=call.id, ok=False, error=f"Tool execution failed: {str(e)}")
+        return StructuredToolResult(
+            tool_name=call.name,
+            success=False,
+            error=f"Tool execution failed: {str(e)}",
+            execution_time=execution_time
+        )
 
     except Exception as e:
+        execution_time = time.time() - start_time
         activity.logger.error(f"Unexpected error in tool dispatch for {call.name}: {str(e)}")
-        return ToolResult(id=call.id, ok=False, error=f"Unexpected error: {str(e)}")
+        return StructuredToolResult(
+            tool_name=call.name,
+            success=False,
+            error=f"Unexpected error: {str(e)}",
+            execution_time=execution_time
+        )
 
 
 async def execute_mcp_tool(tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:

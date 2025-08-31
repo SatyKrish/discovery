@@ -6,6 +6,7 @@ Echo MCP Server - Simple echo tool for testing MCP functionality
 import asyncio
 import sys
 import os
+import json
 from typing import Dict, List, Any
 
 # Add the parent directory to the path so we can import base_server
@@ -71,14 +72,30 @@ class EchoServer:
                 if name == "echo":
                     if arguments and "text" in arguments:
                         text = str(arguments["text"])
-                        return [TextContent(type="text", text=f"Echo: {text}")]
-                    return [TextContent(type="text", text="Echo: (no text provided)")]
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "echo.echo",
+                            "success": True,
+                            "content": {"text": text}
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "echo.echo",
+                        "success": False,
+                        "error": "No text provided"
+                    }))]
 
                 elif name == "reverse_echo":
                     if arguments and "text" in arguments:
                         text = str(arguments["text"])
-                        return [TextContent(type="text", text=f"Reversed Echo: {text[::-1]}")]
-                    return [TextContent(type="text", text="Reversed Echo: (no text provided)")]
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "echo.reverse_echo",
+                            "success": True,
+                            "content": {"text": text[::-1]}
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "echo.reverse_echo",
+                        "success": False,
+                        "error": "No text provided"
+                    }))]
 
                 else:
                     return [TextContent(type="text", text=f"Unknown tool: {name}")]

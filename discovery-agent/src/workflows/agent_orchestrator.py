@@ -5,7 +5,8 @@ from typing import List, Dict, Any
 import json
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView, ConversationMemory, PlanningContext, SubGoal
+from src.models import Message, PlanItem, FileRef, ToolCall, ToolResult, AssistantAction, StatusView, ConversationMemory, PlanningContext, SubGoal, ResponseEnvelope, StructuredToolResult
+from src.response_formatter import response_formatter
 
 
 def format_tool_result_for_display(tool_name: str, result: Any) -> str:
@@ -221,33 +222,8 @@ class AgentOrchestratorWorkflow:
 
     @workflow.query
     def get_status(self) -> StatusView:
-        # Get the latest assistant message content from memory for the current turn
-        output_text = None
-
-        # Find the most recent assistant message that was generated for the current turn
-        for msg in reversed(self.state.memory.short_term):
-            if msg.role == "assistant":
-                output_text = msg.content
-                break
-
-        # If no assistant message found but we have tool results, use the last tool result
-        if not output_text and self.state.memory.short_term:
-            last_msg = self.state.memory.short_term[-1]
-            if last_msg.role == "assistant":
-                output_text = last_msg.content
-
-        # Special handling for tool results - look for the most recent tool result message
-        if not output_text:
-            for msg in reversed(self.state.memory.short_term):
-                if msg.role == "assistant" and "Tool '" in msg.content and "' completed successfully" in msg.content:
-                    output_text = msg.content
-                    break
-
-        # Debug logging for troubleshooting
-        if output_text:
-            workflow.logger.debug(f"Status query returning output_text: {output_text[:100]}...")
-        else:
-            workflow.logger.debug(f"Status query: no output_text found, turns={self.state.turns}, last_processed={self.state.last_processed_turn}")
+        # Create response envelope based on current state
+        response = self._create_current_response()
 
         return StatusView(
             conversation_id=self.state.conversation_id,
@@ -256,9 +232,81 @@ class AgentOrchestratorWorkflow:
             turns=self.state.turns,
             artifacts=self.state.artifacts,
             state="done" if self.state.done else "running",
-            output_text=output_text,
+            response=response,
             memory_summary=self.state.memory.summary,
         )
+
+    def _create_current_response(self) -> ResponseEnvelope | None:
+        """Create the current response envelope based on workflow state"""
+        # Find the most recent assistant message
+        for msg in reversed(self.state.memory.short_term):
+            if msg.role == "assistant":
+                # Check if this is a tool result message
+                if "Tool '" in msg.content and "' completed successfully" in msg.content:
+                    response = response_formatter.create_tool_response(
+                        StructuredToolResult(
+                            tool_name=self._extract_tool_name_from_message(msg.content),
+                            success=True,
+                            data=self._extract_tool_data_from_message(msg.content),
+                            formatted_display=msg.content
+                        )
+                    )
+                    response.timestamp = workflow.now().timestamp()
+                    return response
+                else:
+                    # Regular assistant message
+                    response = response_formatter.create_assistant_response(msg.content)
+                    response.timestamp = workflow.now().timestamp()
+                    return response
+
+        # If no assistant message found, check for pending tool call
+        if self.state.pending_tool_call:
+            response = response_formatter.create_response_envelope(
+                response_type="status",
+                status="pending",
+                content="Waiting for tool approval",
+                metadata={"pending_tool": self.state.pending_tool_call.name}
+            )
+            response.timestamp = workflow.now().timestamp()
+            return response
+
+        # If conversation is done
+        if self.state.done:
+            response = response_formatter.create_completion_response()
+            response.timestamp = workflow.now().timestamp()
+            return response
+
+        # No active response
+        return None
+
+    def _extract_tool_name_from_message(self, content: str) -> str:
+        """Extract tool name from tool result message"""
+        try:
+            # Message format: "Tool 'tool.name' completed successfully.\n\nformatted_result"
+            if "Tool '" in content:
+                start = content.find("Tool '") + 6
+                end = content.find("'", start)
+                if end > start:
+                    return content[start:end]
+        except:
+            pass
+        return "unknown_tool"
+
+    def _extract_tool_data_from_message(self, content: str) -> Any:
+        """Extract tool data from tool result message"""
+        try:
+            # Try to extract structured data from the message
+            lines = content.split('\n')
+            for line in lines:
+                if line.startswith("Calculation result:"):
+                    # Calculator result
+                    return {"result": line.split(": ", 1)[1]}
+                elif line.startswith("Echo:"):
+                    # Echo result
+                    return {"text": line.split(": ", 1)[1]}
+        except:
+            pass
+        return None
 
     @workflow.run
     async def run(self, goal: str):
@@ -327,7 +375,8 @@ class AgentOrchestratorWorkflow:
                 if call.requires_approval:
                     self.state.pending_tool_call = call
                     await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
-                result: ToolResult = await workflow.execute_activity(
+
+                tool_result: StructuredToolResult = await workflow.execute_activity(
                     "tool_dispatch",
                     args=[call],
                     heartbeat_timeout=timedelta(seconds=30),
@@ -335,12 +384,14 @@ class AgentOrchestratorWorkflow:
                     retry_policy=RetryPolicy(maximum_attempts=3),
                 )
 
-                # Store tool result in conversation for context
-                if result and isinstance(result, dict) and result.get("output"):
-                    output_data = result["output"]
+                # Create response envelope for the tool result
+                response_envelope = response_formatter.create_tool_response(tool_result)
+                response_envelope.timestamp = workflow.now().timestamp()
 
+                # Store tool result in conversation for context
+                if tool_result.success:
                     # Format the result for human-readable display
-                    formatted_result = format_tool_result_for_display(call.name, output_data)
+                    formatted_result = response_formatter.format_tool_result(tool_result)
 
                     tool_result_message = Message(
                         role="assistant",
@@ -348,6 +399,14 @@ class AgentOrchestratorWorkflow:
                         ts=workflow.now().timestamp()
                     )
                     self.state.memory.short_term.append(tool_result_message)
+                else:
+                    # Handle tool failure
+                    error_message = Message(
+                        role="assistant",
+                        content=f"Tool '{call.name}' failed: {tool_result.error}",
+                        ts=workflow.now().timestamp()
+                    )
+                    self.state.memory.short_term.append(error_message)
 
                 # Generate response based on tool results
                 response_action_dict: dict = await workflow.execute_activity(
@@ -363,7 +422,7 @@ class AgentOrchestratorWorkflow:
                     self.state.memory.short_term.append(response_action.message)
                     # Maintain memory size limit
                     if len(self.state.memory.short_term) > 50:
-                        self.state.memory.short_term = self.state.memory.short_term[-50:]
+                        self.state.memory.short_term = self.state.memory_short_term[-50:]
 
                     # Update processing state so status query returns output_text
                     self.state.last_processed_turn = self.state.turns

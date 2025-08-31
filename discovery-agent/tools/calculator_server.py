@@ -110,36 +110,84 @@ class CalculatorServer:
                         try:
                             # Use safe evaluation
                             result = self._safe_eval_math(expression)
-                            return [TextContent(type="text", text=json.dumps({"result": result}))]
+                            return [TextContent(type="text", text=json.dumps({
+                                "tool": "calculator.calculate",
+                                "success": True,
+                                "content": {"result": result}
+                            }))]
                         except Exception as e:
-                            return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
-                    return [TextContent(type="text", text=json.dumps({"error": "No expression provided"}))]
+                            return [TextContent(type="text", text=json.dumps({
+                                "tool": "calculator.calculate",
+                                "success": False,
+                                "error": str(e)
+                            }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "calculator.calculate",
+                        "success": False,
+                        "error": "No expression provided"
+                    }))]
 
                 elif name == "add":
                     if arguments and "a" in arguments and "b" in arguments:
                         result = arguments["a"] + arguments["b"]
-                        return [TextContent(type="text", text=json.dumps({"result": result}))]
-                    return [TextContent(type="text", text=json.dumps({"error": "Missing arguments 'a' and/or 'b'"}))]
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "calculator.add",
+                            "success": True,
+                            "content": {"result": result}
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "calculator.add",
+                        "success": False,
+                        "error": "Missing arguments 'a' and/or 'b'"
+                    }))]
 
                 elif name == "subtract":
                     if arguments and "a" in arguments and "b" in arguments:
                         result = arguments["a"] - arguments["b"]
-                        return [TextContent(type="text", text=json.dumps({"result": result}))]
-                    return [TextContent(type="text", text=json.dumps({"error": "Missing arguments 'a' and/or 'b'"}))]
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "calculator.subtract",
+                            "success": True,
+                            "content": {"result": result}
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "calculator.subtract",
+                        "success": False,
+                        "error": "Missing arguments 'a' and/or 'b'"
+                    }))]
 
                 elif name == "multiply":
                     if arguments and "a" in arguments and "b" in arguments:
                         result = arguments["a"] * arguments["b"]
-                        return [TextContent(type="text", text=json.dumps({"result": result}))]
-                    return [TextContent(type="text", text=json.dumps({"error": "Missing arguments 'a' and/or 'b'"}))]
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "calculator.multiply",
+                            "success": True,
+                            "content": {"result": result}
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "calculator.multiply",
+                        "success": False,
+                        "error": "Missing arguments 'a' and/or 'b'"
+                    }))]
 
                 elif name == "divide":
                     if arguments and "a" in arguments and "b" in arguments:
                         if arguments["b"] == 0:
-                            return [TextContent(type="text", text=json.dumps({"error": "Division by zero"}))]
+                            return [TextContent(type="text", text=json.dumps({
+                                "tool": "calculator.divide",
+                                "success": False,
+                                "error": "Division by zero"
+                            }))]
                         result = arguments["a"] / arguments["b"]
-                        return [TextContent(type="text", text=json.dumps({"result": result}))]
-                    return [TextContent(type="text", text=json.dumps({"error": "Missing arguments 'a' and/or 'b'"}))]
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "calculator.divide",
+                            "success": True,
+                            "content": {"result": result}
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "calculator.divide",
+                        "success": False,
+                        "error": "Missing arguments 'a' and/or 'b'"
+                    }))]
 
                 else:
                     return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]

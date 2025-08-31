@@ -376,13 +376,19 @@ class AgentOrchestratorWorkflow:
                     self.state.pending_tool_call = call
                     await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
 
-                tool_result: StructuredToolResult = await workflow.execute_activity(
+                tool_result_raw = await workflow.execute_activity(
                     "tool_dispatch",
                     args=[call],
                     heartbeat_timeout=timedelta(seconds=30),
                     start_to_close_timeout=timedelta(minutes=10),
                     retry_policy=RetryPolicy(maximum_attempts=3),
                 )
+
+                # Convert dict back to StructuredToolResult (Temporal deserializes Pydantic models as dicts)
+                if isinstance(tool_result_raw, dict):
+                    tool_result = StructuredToolResult(**tool_result_raw)
+                else:
+                    tool_result = tool_result_raw
 
                 # Create response envelope for the tool result
                 response_envelope = response_formatter.create_tool_response(tool_result)
@@ -422,7 +428,7 @@ class AgentOrchestratorWorkflow:
                     self.state.memory.short_term.append(response_action.message)
                     # Maintain memory size limit
                     if len(self.state.memory.short_term) > 50:
-                        self.state.memory.short_term = self.state.memory_short_term[-50:]
+                        self.state.memory.short_term = self.state.memory.short_term[-50:]
 
                     # Update processing state so status query returns output_text
                     self.state.last_processed_turn = self.state.turns

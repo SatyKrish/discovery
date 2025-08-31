@@ -92,12 +92,9 @@ class WebSearchServer:
 
         # Search images tool
         @self.server.call_tool()
-        async def search_images(arguments: Dict[str, Any] = None) -> List[TextContent]:
+        async def search_images(query: str, max_results: int = 10) -> List[TextContent]:
             """Search for images related to the query."""
-            if arguments and "query" in arguments:
-                query = arguments["query"]
-                max_results = arguments.get("max_results", 10)
-
+            if query:
                 mock_images = self._generate_mock_images(query, max_results)
 
                 return [TextContent(type="text", text=json.dumps({

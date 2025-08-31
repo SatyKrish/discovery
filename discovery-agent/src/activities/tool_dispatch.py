@@ -175,12 +175,19 @@ def _normalize_result(result: Any) -> Any:
     """Normalize MCP tool result for serialization"""
     if hasattr(result, "content"):
         # Handle MCP result objects
-        if hasattr(result.content, "__iter__") and not isinstance(result.content, str):
-            return [
-                item.text if hasattr(item, "text") else str(item)
-                for item in result.content
-            ]
-        return str(result.content)
+        content = result.content
+        if hasattr(content, "__iter__") and not isinstance(content, str):
+            try:
+                # Convert to list if it's iterable
+                content_list = list(content)
+                return [
+                    item.text if hasattr(item, "text") else str(item)
+                    for item in content_list
+                ]
+            except (TypeError, AttributeError):
+                # If conversion fails, return as string
+                return str(content)
+        return str(content)
     return result
 
 

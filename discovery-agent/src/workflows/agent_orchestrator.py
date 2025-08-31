@@ -395,7 +395,7 @@ class AgentOrchestratorWorkflow:
 
                     tool_result_message = Message(
                         role="assistant",
-                        content=f"Tool '{call.name}' completed successfully.\n\n{formatted_result}",
+                        content=formatted_result,
                         ts=workflow.now().timestamp()
                     )
                     self.state.memory.short_term.append(tool_result_message)

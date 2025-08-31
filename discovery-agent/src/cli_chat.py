@@ -126,8 +126,15 @@ def _extract_response_content(response_data: Dict[str, Any]) -> str:
     content = response.get("content", "")
 
     # For tool results, use the formatted display if available
-    if response.get("type") == "tool_result" and isinstance(content, dict):
-        return content.get("formatted_display", str(content))
+    if response.get("type") == "tool_result":
+        if isinstance(content, dict):
+            return content.get("formatted_display", str(content))
+        elif isinstance(content, str):
+            return content
+
+    # For assistant messages, return the content directly
+    if response.get("type") == "assistant_message":
+        return str(content)
 
     return str(content)
 

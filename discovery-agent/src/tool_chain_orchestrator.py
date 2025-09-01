@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Dict, List, Any, Optional
 from src.models import ToolChain, ToolChainStep, ToolChainExecution, ToolSpec
-from src.mcp_client import tool_orchestrator
+from src.mcp.core.client import tool_orchestrator
 from src.config import settings
 
 

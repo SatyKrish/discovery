@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "calculator": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["src/mcp/servers/calculator_server.py"],
+      "env": {},
+      "description": "Safe mathematical calculations and operations",
+      "timeout": 30.0
+    },
+    "web-search": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["src/mcp/servers/web_search_server.py"],
+      "env": {
+        "SEARCH_API_KEY": "${SEARCH_API_KEY:-}"
+      },
+      "description": "Web search functionality (currently mock implementation)",
+      "timeout": 30.0
+    }
+  }
+}

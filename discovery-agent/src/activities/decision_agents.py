@@ -31,8 +31,72 @@ def _make_agent_tool(name: str, schema: Dict[str, Any], description: str) -> Fun
 def _collect_agent_tools() -> List[FunctionTool]:
     tools: List[FunctionTool] = []
     for spec in list_tool_specs():
-        tools.append(_make_agent_tool(spec.name, spec.schema or {}, spec.description or spec.name))
+        tools.append(_make_agent_tool(spec.name, spec.input_schema or {}, spec.description or spec.name))
     return tools
+
+
+def _detect_json_tool_call(content: str) -> Dict[str, Any] | None:
+    """Detect tool calls in JSON format from agent output"""
+    try:
+        parsed = json.loads(content.strip())
+    except json.JSONDecodeError:
+        return None
+
+    # Format 1: Direct tool call structure
+    if isinstance(parsed, dict) and "tool_call" in parsed:
+        tc = parsed["tool_call"]
+        if isinstance(tc, dict):
+            # Handle nested tool structure
+            if "tool" in tc and "parameters" in tc:
+                tool_name = tc["tool"]
+                # Ensure proper server prefix
+                if "." not in tool_name:
+                    tool_name = _infer_server_prefix(tool_name)
+                return {
+                    "name": tool_name,
+                    "args": tc["parameters"]
+                }
+            # Handle direct tool name
+            elif "tool_name" in tc and "parameters" in tc:
+                tool_name = tc["tool_name"]
+                if "." not in tool_name:
+                    tool_name = _infer_server_prefix(tool_name)
+                return {
+                    "name": tool_name,
+                    "args": tc["parameters"]
+                }
+
+    # Format 2: Simple tool call with parameters
+    if isinstance(parsed, dict) and "tool" in parsed and "parameters" in parsed:
+        tool_name = parsed["tool"]
+        if "." not in tool_name:
+            tool_name = _infer_server_prefix(tool_name)
+        return {
+            "name": tool_name,
+            "args": parsed["parameters"]
+        }
+
+    return None
+
+
+def _infer_server_prefix(tool_name: str) -> str:
+    """Infer MCP server prefix based on tool name"""
+    tool_mappings = {
+        "weather": "weather",
+        "weather_api": "weather",
+        "get_current_weather": "weather",
+        "find_flights": "flights",
+        "flight": "flights",
+        "search": "web-search",
+        "calculate": "calculator",
+        "echo": "echo"
+    }
+
+    for keyword, server in tool_mappings.items():
+        if keyword in tool_name.lower():
+            return f"{server}.{tool_name}"
+
+    return f"web-search.{tool_name}"  # Default fallback
 
 @activity.defn
 async def decision_agents_activity(state_view: dict) -> dict:
@@ -54,7 +118,10 @@ async def decision_agents_activity(state_view: dict) -> dict:
                 "For assistant_message: Provide a natural, conversational response to the user.\n"
                 "For tool_call: Use the available tools and return JSON with tool details.\n"
                 "For other actions: Return the appropriate JSON structure.\n\n"
-                "If you need to call a tool, the tool will return _tool_request in its output."
+                "Available tools: echo.echo, calculator.calculate, web-search.web_search\n"
+                "Use proper tool names with server prefixes (e.g., 'web-search.web_search')\n"
+                "If you need to call a tool, return a JSON object with 'tool_call' and 'parameters' fields.\n"
+                "The tool will be executed immediately and results will be provided in the next response."
             ),
             tools=_collect_agent_tools(),
         )
@@ -82,8 +149,26 @@ async def decision_agents_activity(state_view: dict) -> dict:
                         "plan_diff": None,
                     }
 
-        # Otherwise, treat the final output as an assistant message
+        # Check for tool calls in final output (enhanced detection)
         content = str(getattr(run_result, "final_output", ""))
+
+        # Enhanced tool call detection for JSON-formatted tool calls
+        tool_call = _detect_json_tool_call(content)
+
+        if tool_call:
+            # Return tool call action instead of executing immediately
+            return {
+                "type": "tool_call",
+                "call": {
+                    "id": f"tc-{info.activity_id}",
+                    "name": tool_call["name"],
+                    "args": tool_call["args"],
+                    "requires_approval": False,
+                },
+                "message": None,
+                "subagent_spec": None,
+                "plan_diff": None,
+            }
 
         # Try to parse JSON output to extract the actual message
         try:

@@ -1,128 +1,185 @@
 from __future__ import annotations
+
 import time
-from fastapi import FastAPI
+from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from temporalio.client import Client
-from pathlib import Path
-from src.config import settings, apply_openai_env_from_settings
-from src.otel import setup_tracing
-from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
-from src.models import Message
+from temporalio.client import Client, WithStartWorkflowOperation
 from temporalio.contrib.openai_agents import OpenAIAgentsPlugin
 from temporalio.contrib.pydantic import pydantic_data_converter
 
-# Load .env files at process start (outside workflow sandbox)
-try:
-    from dotenv import load_dotenv
-    for f in (".env", ".env.local"):
-        p = Path(f)
-        if p.exists():
-            load_dotenv(p)
-except Exception:
-    pass
+from src.config import settings, apply_openai_env_from_settings
+from src.otel import setup_tracing
+from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow, TurnResult
+from src.models import Message  # your existing pydantic model
 
-app = FastAPI(title="Discovery Agent API")
-setup_tracing(settings.otel_service_name_api, settings.otel_endpoint)
 
-async def get_client() -> Client:
-    # Ensure Azure/OpenAI env for data converter consistency
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown events."""
+    print("🚀 Starting Discovery Agent API...")
+
+    # Apply OpenAI environment settings
     apply_openai_env_from_settings()
 
-    return await Client.connect(
-        settings.temporal_target,
-        namespace=settings.temporal_namespace,
-        plugins=[OpenAIAgentsPlugin()],
-    data_converter=pydantic_data_converter,
-    )
+    # Setup tracing
+    setup_tracing(settings.otel_service_name_api, settings.otel_endpoint)
 
-class StartRequest(BaseModel):
-    goal: str
-    tenant: str | None = None
-    user_id: str | None = None
-
-@app.post("/sessions")
-async def start_session(req: StartRequest):
-    client = await get_client()
-    workflow_id = f"session-{int(time.time()*1000)}"
-    handle = await client.start_workflow(
-        AgentOrchestratorWorkflow.run,
-        req.goal,
-        id=workflow_id,
-        task_queue=settings.task_queue,
-        # Use memo only; search attributes require pre-registration
-        memo={
-            "started_at": int(time.time()),
-            "Goal": req.goal,
-            **({"Tenant": req.tenant} if req.tenant else {}),
-            **({"UserId": req.user_id} if req.user_id else {}),
-        },
-    )
-    return {"workflow_id": handle.id}
-
-class MessageRequest(BaseModel):
-    text: str
-
-@app.post("/sessions/{workflow_id}/messages")
-async def send_user_message(workflow_id: str, req: MessageRequest):
-    client = await get_client()
-    handle = client.get_workflow_handle(workflow_id)
-    await handle.signal(AgentOrchestratorWorkflow.user_message, Message(role="user", content=req.text, ts=time.time()))
-    return {"ok": True}
-
-class ApprovalRequest(BaseModel):
-    tool_call_id: str
-    approved: bool
-    args: dict | None = None
-
-@app.post("/sessions/{workflow_id}/approve")
-async def approve_tool(workflow_id: str, req: ApprovalRequest):
-    client = await get_client()
-    handle = client.get_workflow_handle(workflow_id)
-    await handle.signal(AgentOrchestratorWorkflow.approve_tool, req.tool_call_id, req.approved, req.args)
-    return {"ok": True}
-
-@app.post("/sessions/{workflow_id}/end")
-async def end_conversation(workflow_id: str):
-    client = await get_client()
-    handle = client.get_workflow_handle(workflow_id)
-    await handle.signal(AgentOrchestratorWorkflow.end_conversation)
-    return {"ok": True}
-
-@app.get("/sessions/{workflow_id}/status")
-async def get_status(workflow_id: str, since: int = 0):
-    client = await get_client()
-    handle = client.get_workflow_handle(workflow_id)
-    status = await handle.query(AgentOrchestratorWorkflow.get_status)
-
-    # Convert StatusView to dict, handling ResponseEnvelope serialization
+    # Connect to Temporal
+    temporal_client = None
     try:
-        status_dict = status.model_dump()
+        print(f"🔗 Connecting to Temporal at {settings.temporal_target}...")
+        temporal_client = await Client.connect(
+            settings.temporal_target,
+            namespace=settings.temporal_namespace,
+            plugins=[OpenAIAgentsPlugin()],
+            data_converter=pydantic_data_converter,
+        )
+        print("✅ Connected to Temporal successfully")
+        app.state.temporal_client = temporal_client
+    except Exception as e:
+        print(f"❌ Failed to connect to Temporal: {e}")
+        print("⚠️  API will start but Temporal features will be unavailable")
+        app.state.temporal_client = None
 
-        # Handle ResponseEnvelope serialization
-        if status.response:
-            status_dict["response"] = status.response.model_dump()
-        else:
-            status_dict["response"] = None
+    print("🎉 Discovery Agent API started successfully")
+    yield
 
-        # Filter events since last client seq (cursor-based pagination)
-        if hasattr(status, 'events') and status.events:
-            new_events = [e for e in status.events if e.seq > since]
-            status_dict["events"] = [e.model_dump() for e in new_events]
-        else:
-            status_dict["events"] = []
+    # Cleanup
+    if temporal_client:
+        await temporal_client.close()
+    print("👋 Discovery Agent API shut down")
 
-        return status_dict
-    except Exception:
-        # Fallback for any serialization issues
-        return {
-            "conversation_id": getattr(status, "conversation_id", ""),
-            "plan": getattr(status, "plan", []),
-            "pending_tool_call": getattr(status, "pending_tool_call", None),
-            "turns": getattr(status, "turns", 0),
-            "artifacts": getattr(status, "artifacts", []),
-            "state": getattr(status, "state", "unknown"),
-            "response": None,
-            "events": [],
-            "last_seq": getattr(status, "last_seq", 0),
-            "memory_summary": getattr(status, "memory_summary", None),
-        }
+
+app = FastAPI(
+    title="Discovery Agent API",
+    description="Synchronous Updates API for Discovery Agent",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+
+async def _client() -> Client:
+    """Get Temporal client with error handling."""
+    client = getattr(app.state, 'temporal_client', None)
+    if client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Temporal client not available. Please check Temporal server connection."
+        )
+    return client
+
+
+# ---------- Schemas ----------
+
+class ChatRequest(BaseModel):
+    text: str
+    workflow_id: Optional[str] = None
+    goal: Optional[str] = "Have a helpful conversation"
+
+class ConfirmRequest(BaseModel):
+    workflow_id: str
+    tool_call_id: str
+    approved: bool = True
+    args: Optional[dict] = None
+
+class EndRequest(BaseModel):
+    workflow_id: str
+
+
+# ---------- Endpoints ----------
+
+@app.post("/chat/send-sync")
+async def send_sync(req: ChatRequest):
+    client = await _client()
+    wid = req.workflow_id or f"session-{int(time.time() * 1000)}"
+
+    from temporalio.common import WorkflowIDConflictPolicy
+
+    start_op = WithStartWorkflowOperation(
+        AgentOrchestratorWorkflow.run,
+        req.goal or "Have a helpful conversation",
+        id=wid,
+        id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
+        task_queue=settings.task_queue,
+        memo={"started_at": int(time.time()), "Goal": req.goal or ""},
+    )
+
+    try:
+        # Execute @update user_turn with Update-with-Start semantics
+        result: TurnResult = await client.execute_update_with_start_workflow(
+            AgentOrchestratorWorkflow.user_turn,
+            Message(role="user", content=req.text, ts=time.time()),
+            start_workflow_operation=start_op,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"user_turn failed: {e}")
+
+    # Return either assistant or pending_tool for the client to act upon
+    out: Dict[str, Any] = {"workflow_id": wid}
+    out["assistant"] = result.assistant.model_dump() if result.assistant else None
+    out["pending_tool"] = result.pending_tool.model_dump() if result.pending_tool else None
+    return out
+
+
+@app.post("/chat/confirm")
+async def confirm(req: ConfirmRequest):
+    client = await _client()
+    handle = client.get_workflow_handle(req.workflow_id)
+    try:
+        await handle.signal(
+            AgentOrchestratorWorkflow.approve_tool,
+            req.tool_call_id,
+            req.approved,
+            req.args,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"confirm failed: {e}")
+    return {"ok": True}
+
+
+@app.post("/chat/wait-sync")
+async def wait_sync(workflow_id: str):
+    """
+    Blocks until the next assistant message is produced after this call is received.
+    Intended for use immediately after /chat/confirm when approval was required.
+    """
+    client = await _client()
+    handle = client.get_workflow_handle(workflow_id)
+    try:
+        msg: Message = await handle.execute_update(AgentOrchestratorWorkflow.wait_for_assistant)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"wait_sync failed: {e}")
+    return {"workflow_id": workflow_id, "assistant": msg.model_dump()}
+
+
+@app.post("/chat/end")
+async def end_chat(req: EndRequest):
+    client = await _client()
+    handle = client.get_workflow_handle(req.workflow_id)
+    try:
+        await handle.signal(AgentOrchestratorWorkflow.end_conversation)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"end failed: {e}")
+    return {"ok": True}
+
+
+@app.get("/sessions/{workflow_id}/history")
+async def history(workflow_id: str) -> List[Dict[str, Any]]:
+    client = await _client()
+    handle = client.get_workflow_handle(workflow_id)
+    try:
+        msgs = await handle.query(AgentOrchestratorWorkflow.get_conversation_history)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"history failed: {e}")
+    out: List[Dict[str, Any]] = []
+    for m in msgs:
+        out.append(m.model_dump() if hasattr(m, "model_dump") else dict(m))
+    return out
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}

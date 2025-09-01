@@ -32,91 +32,8 @@ class WebSearchServer:
         self._setup_tools()
 
     def _setup_tools(self):
-        """Setup the web search tools"""
+        """Setup the MCP handlers"""
 
-        # Web search tool
-        @self.server.call_tool()
-        async def web_search(arguments: Dict[str, Any] = None) -> List[TextContent]:
-            """Search the web for information."""
-            if arguments and "query" in arguments:
-                query = arguments["query"]
-                max_results = arguments.get("max_results", 5)
-
-                # Mock search results - in real implementation, this would call actual search APIs
-                mock_results = self._generate_mock_results(query, max_results)
-
-                return [TextContent(type="text", text=json.dumps({
-                    "tool": "web-search.web_search",
-                    "success": True,
-                    "content": {
-                        "query": query,
-                        "total_results": len(mock_results),
-                        "results": mock_results,
-                        "search_engine": "mock-search",
-                        "timestamp": "2025-01-01T12:00:00Z"
-                    }
-                }))]
-            return [TextContent(type="text", text=json.dumps({
-                "tool": "web-search.web_search",
-                "success": False,
-                "error": "Missing query parameter"
-            }))]
-
-        # Search news tool
-        @self.server.call_tool()
-        async def search_news(arguments: Dict[str, Any] = None) -> List[TextContent]:
-            """Search for recent news articles."""
-            if arguments and "query" in arguments:
-                query = arguments["query"]
-                days_back = arguments.get("days_back", 7)
-
-                mock_news = self._generate_mock_news(query, days_back)
-
-                return [TextContent(type="text", text=json.dumps({
-                    "tool": "web-search.search_news",
-                    "success": True,
-                    "content": {
-                        "query": query,
-                        "days_back": days_back,
-                        "total_results": len(mock_news),
-                        "results": mock_news,
-                        "source": "mock-news-api",
-                        "timestamp": "2025-01-01T12:00:00Z"
-                    }
-                }))]
-            return [TextContent(type="text", text=json.dumps({
-                "tool": "web-search.search_news",
-                "success": False,
-                "error": "Missing query parameter"
-            }))]
-
-        # Search images tool
-        @self.server.call_tool()
-        async def search_images(arguments: Dict[str, Any] = None) -> List[TextContent]:
-            """Search for images related to the query."""
-            if arguments and "query" in arguments:
-                query = arguments["query"]
-                max_results = arguments.get("max_results", 10)
-                mock_images = self._generate_mock_images(query, max_results)
-
-                return [TextContent(type="text", text=json.dumps({
-                    "tool": "web-search.search_images",
-                    "success": True,
-                    "content": {
-                        "query": query,
-                        "total_results": len(mock_images),
-                        "results": mock_images,
-                        "source": "mock-image-search",
-                        "timestamp": "2025-01-01T12:00:00Z"
-                    }
-                }))]
-            return [TextContent(type="text", text=json.dumps({
-                "tool": "web-search.search_images",
-                "success": False,
-                "error": "Missing query parameter"
-            }))]
-
-        # List tools handler
         @self.server.list_tools()
         async def list_tools() -> List[Tool]:
             """List available tools"""
@@ -158,6 +75,97 @@ class WebSearchServer:
                     }
                 )
             ]
+
+        @self.server.call_tool()
+        async def call_tool(name: str, arguments: Dict[str, Any] = None) -> List[TextContent]:
+            """Handle tool calls"""
+            try:
+                if name == "web_search":
+                    if arguments and "query" in arguments:
+                        query = arguments["query"]
+                        max_results = arguments.get("max_results", 5)
+
+                        # Mock search results - in real implementation, this would call actual search APIs
+                        mock_results = self._generate_mock_results(query, max_results)
+
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "web-search.web_search",
+                            "success": True,
+                            "content": {
+                                "query": query,
+                                "total_results": len(mock_results),
+                                "results": mock_results,
+                                "search_engine": "mock-search",
+                                "timestamp": "2025-01-01T12:00:00Z"
+                            }
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "web-search.web_search",
+                        "success": False,
+                        "error": "Missing query parameter"
+                    }))]
+
+                elif name == "search_news":
+                    if arguments and "query" in arguments:
+                        query = arguments["query"]
+                        days_back = arguments.get("days_back", 7)
+
+                        mock_news = self._generate_mock_news(query, days_back)
+
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "web-search.search_news",
+                            "success": True,
+                            "content": {
+                                "query": query,
+                                "days_back": days_back,
+                                "total_results": len(mock_news),
+                                "results": mock_news,
+                                "source": "mock-news-api",
+                                "timestamp": "2025-01-01T12:00:00Z"
+                            }
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "web-search.search_news",
+                        "success": False,
+                        "error": "Missing query parameter"
+                    }))]
+
+                elif name == "search_images":
+                    if arguments and "query" in arguments:
+                        query = arguments["query"]
+                        max_results = arguments.get("max_results", 10)
+                        mock_images = self._generate_mock_images(query, max_results)
+
+                        return [TextContent(type="text", text=json.dumps({
+                            "tool": "web-search.search_images",
+                            "success": True,
+                            "content": {
+                                "query": query,
+                                "total_results": len(mock_images),
+                                "results": mock_images,
+                                "source": "mock-image-search",
+                                "timestamp": "2025-01-01T12:00:00Z"
+                            }
+                        }))]
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "web-search.search_images",
+                        "success": False,
+                        "error": "Missing query parameter"
+                    }))]
+
+                else:
+                    return [TextContent(type="text", text=json.dumps({
+                        "tool": "web-search.unknown",
+                        "success": False,
+                        "error": f"Unknown tool: {name}"
+                    }))]
+
+            except Exception as e:
+                return [TextContent(type="text", text=json.dumps({
+                    "tool": f"web-search.{name}",
+                    "success": False,
+                    "error": str(e)
+                }))]
 
     def _generate_mock_results(self, query: str, max_results: int) -> List[Dict[str, Any]]:
         """Generate mock search results"""

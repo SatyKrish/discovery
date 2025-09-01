@@ -1,13 +1,5 @@
 {
   "mcpServers": {
-    "echo": {
-      "type": "stdio",
-      "command": "python",
-      "args": ["src/mcp/servers/echo_server.py"],
-      "env": {},
-      "description": "Simple echo tool for testing MCP functionality",
-      "timeout": 30.0
-    },
     "calculator": {
       "type": "stdio",
       "command": "python",

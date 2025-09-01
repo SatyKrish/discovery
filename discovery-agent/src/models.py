@@ -165,6 +165,8 @@ class ResponseEnvelope(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
     client_hints: Dict[str, Any] = Field(default_factory=dict)
     timestamp: Optional[float] = None
+    seq: int = 0  # Monotonically increasing per workflow
+    turn_id: int = 0  # Current turn number
 
 class StructuredToolResult(BaseModel):
     """Structured result from tool execution"""
@@ -184,4 +186,7 @@ class StatusView(BaseModel):
     artifacts: List[FileRef] = []
     state: str = "running"
     response: ResponseEnvelope | None = None
+    # Event batching support
+    events: List[ResponseEnvelope] = Field(default_factory=list)
+    last_seq: int = 0
     memory_summary: str | None = None

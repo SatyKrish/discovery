@@ -148,8 +148,10 @@ class State:
     gate_ok: bool = True
     done: bool = False
     prompt_queue: Deque[str] = field(default_factory=deque)
-    last_response_id: str = ""  # OpenAI Responses API state management
+    last_response_id: str = "" 
     memory: ConversationMemory = field(default_factory=ConversationMemory)
+    event_queue: Deque[ResponseEnvelope] = field(default_factory=deque)
+    next_seq: int = 0
 
     def view_for_llm(self) -> dict:
         # Provide recent messages for context (limit to last 20 for efficiency)
@@ -177,6 +179,14 @@ class State:
 class AgentOrchestratorWorkflow:
     def __init__(self):
         self.state = State()
+
+    def _emit_event(self, envelope: ResponseEnvelope):
+        """Emit an event with proper sequencing"""
+        envelope.seq = self.state.next_seq
+        envelope.turn_id = self.state.turns
+        envelope.timestamp = workflow.now().timestamp()
+        self.state.event_queue.append(envelope)
+        self.state.next_seq += 1
 
     @workflow.signal
     async def user_message(self, msg: Message):
@@ -223,7 +233,7 @@ class AgentOrchestratorWorkflow:
 
     @workflow.query
     def get_status(self) -> StatusView:
-        # Create response envelope based on current state
+        # Create response envelope based on current state (backward compatibility)
         response = self._create_current_response()
 
         return StatusView(
@@ -233,7 +243,9 @@ class AgentOrchestratorWorkflow:
             turns=self.state.turns,
             artifacts=self.state.artifacts,
             state="done" if self.state.done else "running",
-            response=response,
+            response=response,  # Backward compatibility
+            events=list(self.state.event_queue),  # NEW: Event batch
+            last_seq=self.state.next_seq - 1,
             memory_summary=self.state.memory.summary,
         )
 
@@ -370,11 +382,28 @@ class AgentOrchestratorWorkflow:
                         # Maintain memory size limit
                         if len(self.state.memory.short_term) > 50:
                             self.state.memory.short_term = self.state.memory.short_term[-50:]
+
+                        # Emit event for simple messages
+                        assistant_event = response_formatter.create_assistant_response(
+                            action.message.content
+                        )
+                        assistant_event.client_hints = {"requires_user_input": True}
+                        self._emit_event(assistant_event)
                 elif action.type == "revise_plan" and action.plan_diff:
                     self.state.plan = action.plan_diff
                 elif action.type == "tool_call" and action.call:
                     call = action.call
                     if call.requires_approval:
+                        # Emit status event for approval
+                        status_event = response_formatter.create_response_envelope(
+                            response_type="status",
+                            status="pending",
+                            content=f"Tool '{call.name}' requires approval. Proceed?",
+                            metadata={"pending_tool": call.name, "tool_call_id": call.id},
+                            client_hints={"requires_user_input": True}
+                        )
+                        self._emit_event(status_event)
+
                         self.state.pending_tool_call = call
                         await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
 
@@ -392,9 +421,9 @@ class AgentOrchestratorWorkflow:
                     else:
                         tool_result = tool_result_raw
 
-                    # Create response envelope for the tool result
-                    response_envelope = response_formatter.create_tool_response(tool_result)
-                    response_envelope.timestamp = workflow.now().timestamp()
+                    # Emit tool_result event
+                    tool_event = response_formatter.create_tool_response(tool_result)
+                    self._emit_event(tool_event)
 
                     # Store tool result in conversation for context
                     if tool_result.success:
@@ -427,6 +456,13 @@ class AgentOrchestratorWorkflow:
 
                     # Process the response action
                     if response_action.type == "assistant_message" and response_action.message:
+                        # Emit assistant_message event
+                        assistant_event = response_formatter.create_assistant_response(
+                            response_action.message.content
+                        )
+                        assistant_event.client_hints = {"requires_user_input": True}
+                        self._emit_event(assistant_event)
+
                         self.state.memory.short_term.append(response_action.message)
                         # Maintain memory size limit
                         if len(self.state.memory.short_term) > 50:

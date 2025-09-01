@@ -49,8 +49,11 @@ class DiscoveryAgentClient:
         res.raise_for_status()
         return res.json().get("workflow_id")
 
-    def get_status(self, workflow_id: str) -> Dict[str, Any]:
-        res = requests.get(f"{self.base_url}/sessions/{workflow_id}/status")
+    def get_status(self, workflow_id: str, since: int | None = None) -> Dict[str, Any]:
+        params = {}
+        if since is not None:
+            params["since"] = since
+        res = requests.get(f"{self.base_url}/sessions/{workflow_id}/status", params=params)
         if res.status_code == 404:
             # Worker unavailable or workflow not found; return empty status
             return {}
@@ -89,9 +92,9 @@ def start_session(api: str, goal: str = "Have a helpful conversation") -> str:
     return client.start_session(goal)
 
 
-def get_status(api: str, wid: str) -> Dict[str, Any]:
+def get_status(api: str, wid: str, since: int | None = None) -> Dict[str, Any]:
     client = DiscoveryAgentClient(api)
-    return client.get_status(wid)
+    return client.get_status(wid, since)
 
 
 def send_prompt(api: str, wid: str, prompt: str) -> None:
@@ -214,6 +217,9 @@ def _looks_displayable(resp: Dict[str, Any]) -> bool:
     textish = None
     if isinstance(content, dict):
         textish = content.get("formatted_display") or content.get("text") or content.get("message")
+        # Reject dict content that contains tool_call structures without text fields
+        if not textish and any(k in content for k in ["tool_call", "tool", "parameters"]):
+            return False
     elif isinstance(content, str):
         textish = content
     elif isinstance(content, list):
@@ -235,7 +241,11 @@ def _extract_text_for_display(resp_data: Dict[str, Any]) -> str:
     resp = (resp_data or {}).get("response") or {}
     content = resp.get("content") or resp.get("text") or resp.get("message") or ""
     if isinstance(content, dict):
-        return content.get("formatted_display") or content.get("text") or content.get("message") or pretty(content)
+        textish = content.get("formatted_display") or content.get("text") or content.get("message")
+        if textish:
+            return str(textish)
+        # no user text -> don't show tool internals
+        return ""
     if isinstance(content, list):
         return "\n".join(str(x) for x in content)
     if isinstance(content, str):
@@ -254,42 +264,59 @@ def _is_workflow_done(resp_data: Dict[str, Any]) -> bool:
     return t in {"completion", "assistant_message"} and st in {"completed", "done", "success"}
 
 
+def _event_done(e: Dict[str, Any]) -> bool:
+    hints = e.get("client_hints") or {}
+    if hints.get("completion_indicator") in {"conversation_complete", "workflow_completed", "error"}:
+        return True
+    t = (e.get("type") or "").lower()
+    st = (e.get("status") or "").lower()
+    return t in {"completion", "assistant_message"} and st in {"completed", "done", "success"}
+
+
 def run_one_shot(api: str, message: str) -> None:
     """Send a single message and print the response, then exit"""
     wid = start_session(api)
     print(f"Session started: {wid}")
 
+    # Capture base turns before sending prompt
+    base_status = get_status(api, wid)
+    base_turns = (base_status or {}).get("turns", 0) or 0
+
     send_prompt(api, wid, message)
     print("Agent: (generating response...)")
 
     response_start = time.time()
-    last_seen_fp = None
+    seen_fps: set[str] = set()  # Track seen fingerprints to prevent duplicates
     # Optional: if your backend is slow to populate, give it a short grace
     time.sleep(0.25)
+    # Expect one user + one assistant turn after the base
+    expected_turns = base_turns + 2
 
     while True:
         status = get_status(api, wid)
+        current_turns = status.get("turns", base_turns) or base_turns
         resp = (status or {}).get("response") or {}
         fp = _response_fingerprint(resp)
 
         # Debug output if requested
         if os.environ.get("CLI_DEBUG_STATUS") == "1":
             print(pretty({"turns": status.get("turns"),
+                          "expected_turns": expected_turns,
                           "response_keys": list(((status.get("response") or {}).keys())),
                           "response_type": (status.get("response") or {}).get("type"),
                           "response_status": (status.get("response") or {}).get("status"),
                           "role": (status.get("response") or {}).get("role") or (status.get("response") or {}).get("author") or (status.get("response") or {}).get("speaker"),
                          }))
 
-        # Show only if it looks like new AND displayable
-        if fp and fp != last_seen_fp and _looks_displayable(resp):
+        # Show only if unseen AND displayable AND assistant turn committed
+        if current_turns >= expected_turns and fp and fp not in seen_fps and _looks_displayable(resp):
             text = _extract_text_for_display(status).strip()
             if text:
                 print(f"Agent: {text}")
+                seen_fps.add(fp)
                 # If the workflow says it's done, stop waiting; otherwise stop after first displayable message
                 # (If you expect multi-chunk streaming via status, remove the 'break' and keep polling until done)
                 break
-            last_seen_fp = fp
 
         # Timeout
         if time.time() - response_start > 30:
@@ -302,16 +329,21 @@ def run_one_shot(api: str, message: str) -> None:
 
 
 def run_repl(api: str) -> None:
-    """Run the interactive REPL"""
+    """Run the interactive REPL with event-based multi-message support"""
     wid = start_session(api)
     print(f"Session started: {wid}")
 
     try:
-        # Keep a session-wide fingerprint of the last response we've shown
-        # so we don't reprint the previous turn's answer after each prompt.
-        session_last_seen_fp = None
+        # Initialize turn tracking once per session
+        initial_status = get_status(api, wid)
+        last_committed_turns = (initial_status or {}).get("turns", 0) or 0
+        # Track the last sequence number we've processed
+        session_last_seq = -1
+        # Track seen fingerprints to prevent replaying the same content
+        seen_fps: set[str] = set()
+
         while True:
-            prompt = input("You: ")
+            prompt = input("User: ")
             if not prompt:
                 continue
 
@@ -326,28 +358,71 @@ def run_repl(api: str) -> None:
             response_start = time.time()
             # Optional: if your backend is slow to populate, give it a short grace
             time.sleep(0.25)
+            # Expect one user + one assistant turn after the last committed pair
+            expected_turns = last_committed_turns + 2
 
             while True:
-                status = get_status(api, wid)
-                resp = (status or {}).get("response") or {}
-                fp = _response_fingerprint(resp)
+                status = get_status(api, wid, since=session_last_seq)
+                events = status.get("events", []) or []
+                current_turns = status.get("turns", last_committed_turns) or last_committed_turns
+                printed = False
+                has_user_input_required = False
 
-                # Show only if it looks like new AND displayable
-                if fp and fp != session_last_seen_fp and _looks_displayable(resp):
-                    text = _extract_text_for_display(status).strip()
-                    if text:
-                        print(f"Agent: {text}")
-                        # Update session-wide fingerprint so we don't show this again
-                        session_last_seen_fp = fp
-                        # If the workflow says it's done, stop waiting; otherwise stop after first displayable message
-                        # (If you expect multi-chunk streaming via status, remove the 'break' and keep polling until done)
-                        break
+                # ---- 1) Process events first (ordered, cursored) ----
+                max_seq_in_batch = session_last_seq
+                for e in events:
+                    ev_seq = e.get("seq")
+                    if isinstance(ev_seq, int):
+                        max_seq_in_batch = max(max_seq_in_batch, ev_seq)
 
-                # Timeout
+                    ev_fp = _response_fingerprint(e)
+                    if ev_fp not in seen_fps and _looks_displayable(e):
+                        text = _extract_text_for_display({"response": e}).strip()
+                        if text:
+                            print(f"Agent: {text}")
+                            printed = True
+                            seen_fps.add(ev_fp)
+
+                    if e.get("client_hints", {}).get("requires_user_input", False):
+                        has_user_input_required = True
+
+                # Advance cursor robustly
+                server_last_seq = status.get("last_seq")
+                if isinstance(server_last_seq, int):
+                    session_last_seq = max(session_last_seq, server_last_seq)
+                elif events and all("seq" not in e for e in events):
+                    session_last_seq += len(events)
+                else:
+                    session_last_seq = max_seq_in_batch
+
+                # Stop if final/user-input needed
+                if has_user_input_required or any(_event_done(e) for e in events):
+                    last_committed_turns = max(last_committed_turns, current_turns)
+                    break
+
+                # ---- 2) Fall back to top-level response (only if unseen AND assistant turn committed) ----
+                if not printed:
+                    resp = (status or {}).get("response") or {}
+                    resp_fp = _response_fingerprint(resp)
+                    # Only allow snapshot printing when we've reached the assistant turn
+                    if current_turns >= expected_turns and resp and (resp_fp not in seen_fps) and _looks_displayable(resp):
+                        text = _extract_text_for_display(status).strip()
+                        if text:
+                            print(f"Agent: {text}")
+                            printed = True
+                            seen_fps.add(resp_fp)
+                        # If the aggregate says we're done, stop after printing it
+                        if printed and (_is_workflow_done(status) or (resp.get("client_hints") or {}).get("requires_user_input", False)):
+                            last_committed_turns = max(last_committed_turns, current_turns)
+                            break
+
+                # ---- 3) Poll/timeout ----
+                if printed:
+                    last_committed_turns = max(last_committed_turns, current_turns)
+                    break
                 if time.time() - response_start > 30:
                     print("Agent: (response timeout - no response available)")
                     break
-
                 time.sleep(0.5)
     except KeyboardInterrupt:
         pass

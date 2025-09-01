@@ -64,7 +64,7 @@ def run_repl(api_base: str, workflow_id: Optional[str]):
     print(f"Connected. workflow_id={workflow_id or '(created on first turn)'}")
     try:
         while True:
-            user = input("You: ").strip()
+            user = input("User: ").strip()
             if not user:
                 continue
             if user.lower() in {":q", "/q", ":quit", "/quit"}:

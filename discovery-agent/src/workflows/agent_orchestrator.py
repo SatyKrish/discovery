@@ -22,102 +22,39 @@ from src.models import (
     StructuredToolResult,
 )
 
-# ---------- Formatting helpers (pure/deterministic) ----------
+# ---------- Minimal helper: detect JSON tool directives in "assistant" messages ----------
 
-def _format_web_search_result(data: Dict[str, Any]) -> str:
-    query = data.get("query", "Unknown query")
-    total_results = data.get("total_results", 0)
-    results = data.get("results", [])
-    if not results:
-        return f"No results found for '{query}'."
-    out = [f"Search results for '{query}':", ""]
-    for i, r in enumerate(results[:5], 1):
-        title = r.get("title", "No title")
-        url = r.get("url", "")
-        out.append(f"{i}. {title}")
-        if url:
-            out.append(f"   {url}")
-        out.append("")
-    if total_results > 5:
-        out.append(f"... and {total_results - 5} more results.")
-    return "\n".join(out)
-
-def _format_calculator_result(data: Dict[str, Any]) -> str:
-    return f"Calculation result: {data.get('expression','')} = {data.get('result','')}"
-
-def _format_echo_result(data: Dict[str, Any]) -> str:
-    if isinstance(data, dict) and "content" in data:
-        for item in data.get("content", []) or []:
-            if isinstance(item, dict) and item.get("type") == "text":
-                return f"Echo: {item.get('text','')}"
-        return f"Echo result: {str(data)}"
-    return f"Echo: {data.get('text','')}"
-
-def _format_mcp_content_result(tool_name: str, data: Dict[str, Any]) -> str:
-    if "content" in data:
-        content_list = data.get("content") or []
-    elif "success" in data:
-        if data.get("success"):
-            content_list = data.get("content") or []
-        else:
-            return f"Tool '{tool_name}' failed: {data.get('error', 'Unknown error')}"
-    else:
-        return f"Tool '{tool_name}' result: {str(data)}"
-
-    if not content_list:
-        return f"Tool '{tool_name}' completed but returned no content."
-
-    texts: List[str] = []
-    for item in content_list:
-        if isinstance(item, dict) and item.get("type") == "text":
-            texts.append(item.get("text", ""))
-        elif isinstance(item, str):
-            texts.append(item)
-    return f"Tool '{tool_name}' result: {' '.join(texts) if texts else f'{len(content_list)} content items.'}"
-
-def _format_json_result(tool_name: str, data: Dict[str, Any]) -> str:
-    if tool_name == "web-search.web_search":
-        return _format_web_search_result(data)
-    if tool_name == "calculator.calculate":
-        return _format_calculator_result(data)
-    if tool_name == "echo.echo":
-        return _format_echo_result(data)
-    return json.dumps(data, indent=2)
-
-def _format_tool_result_for_display(tool_name: str, result: Any) -> str:
-    """Format tool results into user-friendly messages."""
+def _maybe_parse_tool_directive(raw: str) -> Optional[dict]:
+    """
+    Recognize common JSON directive shapes and normalize to:
+      {"name": "<tool_name>", "args": { ... }, "requires_approval": bool}
+    Returns None if not a directive.
+    """
     try:
-        if isinstance(result, dict):
-            # Handle MCP tool results
-            if "success" in result and "content" in result:
-                if result["success"]:
-                    return _format_mcp_content_result(tool_name, result)
-                else:
-                    return f"Sorry, the {tool_name} tool failed: {result.get('error', 'Unknown error')}"
+        data = json.loads(raw)
+    except Exception:
+        return None
 
-            # Handle structured results
-            if "result" in result:
-                # Calculator result
-                if tool_name == "calculator.calculate":
-                    return f"The calculation result is: {result['result']}"
+    if not isinstance(data, dict):
+        return None
 
-            # Handle content arrays
-            if "content" in result and isinstance(result["content"], list):
-                return _format_mcp_content_result(tool_name, result)
+    # Support a few common fields
+    name = data.get("tool_call") or data.get("tool") or data.get("name")
+    if not name or not isinstance(name, str):
+        return None
 
-            # Fallback to JSON formatting
-            return _format_json_result(tool_name, result)
+    args = (
+        data.get("parameters")
+        or data.get("args")
+        or data.get("arguments")
+        or data.get("input")
+        or {}
+    )
+    if not isinstance(args, dict):
+        args = {"input": args}
 
-        if isinstance(result, str):
-            try:
-                parsed = json.loads(result)
-                return _format_tool_result_for_display(tool_name, parsed)
-            except json.JSONDecodeError:
-                return result
-
-        return str(result)
-    except Exception as e:
-        return f"I encountered an error processing the tool result: {e}"
+    requires_approval = bool(data.get("requires_approval", False))
+    return {"name": name, "args": args, "requires_approval": requires_approval}
 
 # ---------- Workflow state ----------
 
@@ -264,7 +201,7 @@ class AgentOrchestratorWorkflow:
     async def run(self, goal: str):
         self.state.conversation_id = workflow.info().workflow_id
 
-        # Discover tools once
+        # Discover tools once (still useful for MCP warmup, but we don't register formatters)
         discovery = await workflow.execute_activity(
             "discover_mcp_tools",
             args=[],
@@ -307,55 +244,25 @@ class AgentOrchestratorWorkflow:
 
             if action.type == "assistant_message":
                 if action.message:
-                    self._append_assistant(action.message)
+                    # If assistant text is a JSON directive, treat it as a tool call, else emit as-is
+                    directive = _maybe_parse_tool_directive(action.message.content)
+                    if directive:
+                        await self._run_tool_and_summarize(
+                            ToolCall(
+                                id=f"tc-{self.state.turns}-{int(workflow.now().timestamp())}",
+                                name=directive["name"],
+                                args=directive["args"],
+                                requires_approval=directive["requires_approval"],
+                            )
+                        )
+                    else:
+                        self._append_assistant(action.message)
 
             elif action.type == "revise_plan" and action.plan_diff:
                 self.state.plan = action.plan_diff
 
             elif action.type == "tool_call" and action.call:
-                call = action.call
-
-                # Approval gating
-                if call.requires_approval:
-                    self.state.pending_tool_call = call
-                    await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
-                    if self.state.done:
-                        break
-                    # call may have updated args via approve signal
-
-                # Execute tool
-                raw = await workflow.execute_activity(
-                    "tool_dispatch",
-                    args=[call],
-                    heartbeat_timeout=timedelta(seconds=30),
-                    start_to_close_timeout=timedelta(minutes=10),
-                    retry_policy=RetryPolicy(maximum_attempts=3),
-                )
-                tool_result = StructuredToolResult(**raw) if isinstance(raw, dict) else raw
-
-                # Store a readable tool result as an assistant message
-                if tool_result.success:
-                    formatted = _format_tool_result_for_display(call.name, tool_result.data)
-                    self._append_assistant(Message(role="assistant", content=formatted, ts=workflow.now().timestamp()))
-                else:
-                    self._append_assistant(
-                        Message(
-                            role="assistant",
-                            content=f"Tool '{call.name}' failed: {tool_result.error}",
-                            ts=workflow.now().timestamp(),
-                        )
-                    )
-
-                # Follow-up response after tool
-                response_action_dict: dict = await workflow.execute_activity(
-                    "decision_agents_activity",
-                    args=[self.state.view_for_llm()],
-                    start_to_close_timeout=timedelta(minutes=2),
-                    retry_policy=RetryPolicy(maximum_attempts=3),
-                )
-                response_action = AssistantAction(**response_action_dict)
-                if response_action.type == "assistant_message" and response_action.message:
-                    self._append_assistant(response_action.message)
+                await self._run_tool_and_summarize(action.call)
 
             # Summarize / rotate history
             if self.state.should_summarize():
@@ -376,3 +283,57 @@ class AgentOrchestratorWorkflow:
         self.state.memory.short_term.append(msg)
         if len(self.state.memory.short_term) > 50:
             self.state.memory.short_term = self.state.memory.short_term[-50:]
+
+    async def _run_tool_and_summarize(self, call: ToolCall) -> None:
+        # Approval gating
+        if call.requires_approval:
+            self.state.pending_tool_call = call
+            await workflow.wait_condition(lambda: self.state.pending_tool_call is None or self.state.done)
+            if self.state.done:
+                return
+
+        # Execute tool
+        raw = await workflow.execute_activity(
+            "tool_dispatch",
+            args=[call],
+            heartbeat_timeout=timedelta(seconds=30),
+            start_to_close_timeout=timedelta(minutes=10),
+            retry_policy=RetryPolicy(maximum_attempts=3),
+        )
+        tool_result = StructuredToolResult(**raw) if isinstance(raw, dict) else raw
+
+        # Append raw structured result as a system message for the LLM to read
+        if tool_result.success:
+            tool_msg = Message(
+                role="system",
+                content=json.dumps({"tool": call.name, "result": tool_result.data}, ensure_ascii=False),
+                ts=workflow.now().timestamp(),
+            )
+        else:
+            tool_msg = Message(
+                role="system",
+                content=json.dumps({"tool": call.name, "error": tool_result.error}, ensure_ascii=False),
+                ts=workflow.now().timestamp(),
+            )
+        self.state.memory.short_term.append(tool_msg)
+
+        # Ask the LLM to summarize in natural language
+        response_action_dict: dict = await workflow.execute_activity(
+            "decision_agents_activity",
+            args=[self.state.view_for_llm()],
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=RetryPolicy(maximum_attempts=3),
+        )
+        response_action = AssistantAction(**response_action_dict)
+
+        if response_action.type == "assistant_message" and response_action.message:
+            self._append_assistant(response_action.message)
+        else:
+            # Fallback, avoid leaking JSON
+            self._append_assistant(
+                Message(
+                    role="assistant",
+                    content="I’ve run the requested tool and updated context, but couldn’t draft a reply. Could you rephrase or specify what you need next?",
+                    ts=workflow.now().timestamp(),
+                )
+            )

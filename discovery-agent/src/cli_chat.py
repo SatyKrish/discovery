@@ -18,6 +18,7 @@ terminal. Press Ctrl+C to exit or use :quit command.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -109,35 +110,16 @@ def end_chat(api: str, wid: str) -> None:
 
 
 def _is_final_response(response_data: Dict[str, Any]) -> bool:
-    """Check if the response indicates completion"""
-    if not response_data or "response" not in response_data:
-        return False
+    r = (response_data or {}).get("response") or {}
+    t = r.get("type", "")
+    status = r.get("status", "")
+    hints = r.get("client_hints", {}) or {}
 
-    response = response_data["response"]
-    if not response:
-        return False
-
-    # Check response type and status
-    response_type = response.get("type", "")
-    status = response.get("status", "")
-    client_hints = response.get("client_hints", {})
-
-    # Check for completion indicators in client hints
-    completion_indicator = client_hints.get("completion_indicator", "")
-
-    if completion_indicator in ["conversation_complete", "error"]:
+    if hints.get("completion_indicator") in {"conversation_complete", "workflow_completed", "error"}:
         return True
 
-    # Check for specific response types that indicate completion
-    if response_type == "completion" and status == "completed":
-        return True
-
-    # Check for tool completion without next actions
-    if response_type == "tool_result" and status == "success":
-        next_actions = client_hints.get("next_actions", [])
-        return len(next_actions) == 0
-
-    return False
+    # Treat only real assistant completions as final
+    return t in ("completion", "assistant_message") and status in ("completed", "done", "success")
 
 
 def _is_processing_response(response_data: Dict[str, Any]) -> bool:
@@ -205,6 +187,73 @@ def _extract_response_content(response_data: Dict[str, Any]) -> str:
         return str(content)
 
 
+def _response_fingerprint(resp: Dict[str, Any]) -> str:
+    """Create a fingerprint of the response to detect changes"""
+    try:
+        # Remove volatile fields that change on each status query
+        sanitized = dict(resp or {})
+        if "timestamp" in sanitized:
+            sanitized = dict(sanitized)
+            sanitized.pop("timestamp", None)
+        return json.dumps(sanitized, sort_keys=True, ensure_ascii=False)
+    except Exception:
+        return str(resp)
+
+
+def _looks_displayable(resp: Dict[str, Any]) -> bool:
+    """Return True if this looks like something we should show to a user."""
+    if not isinstance(resp, dict):
+        return False
+    t = (resp.get("type") or "").lower()
+
+    # Hide known-noise types unless they contain real text to show
+    if t in {"status", "tool_request", "tool_call"}:
+        return False
+
+    content = resp.get("content")
+    textish = None
+    if isinstance(content, dict):
+        textish = content.get("formatted_display") or content.get("text") or content.get("message")
+    elif isinstance(content, str):
+        textish = content
+    elif isinstance(content, list):
+        textish = "\n".join([str(x) for x in content if x])
+
+    # If there's actual text-ish content, show it
+    if textish and str(textish).strip():
+        return True
+
+    # Otherwise only show classic assistant/completion types
+    if t in {"completion", "assistant_message", "message"}:
+        return True
+
+    return False
+
+
+def _extract_text_for_display(resp_data: Dict[str, Any]) -> str:
+    """Extract text for display from response data"""
+    resp = (resp_data or {}).get("response") or {}
+    content = resp.get("content") or resp.get("text") or resp.get("message") or ""
+    if isinstance(content, dict):
+        return content.get("formatted_display") or content.get("text") or content.get("message") or pretty(content)
+    if isinstance(content, list):
+        return "\n".join(str(x) for x in content)
+    if isinstance(content, str):
+        return content
+    return str(content)
+
+
+def _is_workflow_done(resp_data: Dict[str, Any]) -> bool:
+    """Check if the workflow/conversation is complete"""
+    r = (resp_data or {}).get("response") or {}
+    hints = r.get("client_hints") or {}
+    if hints.get("completion_indicator") in {"conversation_complete", "workflow_completed", "error"}:
+        return True
+    t = (r.get("type") or "").lower()
+    st = (r.get("status") or "").lower()
+    return t in {"completion", "assistant_message"} and st in {"completed", "done", "success"}
+
+
 def run_one_shot(api: str, message: str) -> None:
     """Send a single message and print the response, then exit"""
     wid = start_session(api)
@@ -213,53 +262,54 @@ def run_one_shot(api: str, message: str) -> None:
     send_prompt(api, wid, message)
     print("Agent: (generating response...)")
 
-    # Poll for response
     response_start = time.time()
-    last_turns = 0
+    last_seen_fp = None
+    # Optional: if your backend is slow to populate, give it a short grace
+    time.sleep(0.25)
 
     while True:
-        time.sleep(0.5)
         status = get_status(api, wid)
-        turns = int(status.get("turns", 0))
+        resp = (status or {}).get("response") or {}
+        fp = _response_fingerprint(resp)
 
-        if turns > last_turns:
-            # Turns increased, wait for actual response
-            while True:
-                response_content = _extract_response_content(status)
-                if response_content:
-                    if _is_final_response(status):
-                        print(f"Agent: {response_content}")
-                        end_conversation(api, wid)
-                        return
-                    elif not _is_processing_response(status):
-                        print(f"Agent: {response_content}")
-                        end_conversation(api, wid)
-                        return
+        # Debug output if requested
+        if os.environ.get("CLI_DEBUG_STATUS") == "1":
+            print(pretty({"turns": status.get("turns"),
+                          "response_keys": list(((status.get("response") or {}).keys())),
+                          "response_type": (status.get("response") or {}).get("type"),
+                          "response_status": (status.get("response") or {}).get("status"),
+                          "role": (status.get("response") or {}).get("role") or (status.get("response") or {}).get("author") or (status.get("response") or {}).get("speaker"),
+                         }))
 
-                # Timeout after 30 seconds
-                if time.time() - response_start > 30:
-                    print("Agent: (response timeout - no response available)")
-                    end_conversation(api, wid)
-                    return
+        # Show only if it looks like new AND displayable
+        if fp and fp != last_seen_fp and _looks_displayable(resp):
+            text = _extract_text_for_display(status).strip()
+            if text:
+                print(f"Agent: {text}")
+                # If the workflow says it's done, stop waiting; otherwise stop after first displayable message
+                # (If you expect multi-chunk streaming via status, remove the 'break' and keep polling until done)
+                break
+            last_seen_fp = fp
 
-                time.sleep(0.5)
-                status = get_status(api, wid)
-            last_turns = turns
-
-        # Timeout for initial response
+        # Timeout
         if time.time() - response_start > 30:
-            print("Agent: (no response received)")
-            end_conversation(api, wid)
-            return
+            print("Agent: (response timeout - no response available)")
+            break
+
+        time.sleep(0.5)
+
+    end_conversation(api, wid)
 
 
 def run_repl(api: str) -> None:
     """Run the interactive REPL"""
     wid = start_session(api)
     print(f"Session started: {wid}")
-    last_turns = 0
 
     try:
+        # Keep a session-wide fingerprint of the last response we've shown
+        # so we don't reprint the previous turn's answer after each prompt.
+        session_last_seen_fp = None
         while True:
             prompt = input("You: ")
             if not prompt:
@@ -271,44 +321,39 @@ def run_repl(api: str) -> None:
                 break
 
             send_prompt(api, wid, prompt)
-            # Poll for turns increase, then wait for actual response
-            while True:
-                time.sleep(1)
-                status = get_status(api, wid)
-                turns = int(status.get("turns", 0))
-                if turns > last_turns:
-                    # Turns increased, now wait for the actual response
-                    print("Agent: (generating response...)")
-                    response_start = time.time()
-                    while True:
-                        response_content = _extract_response_content(status)
-                        if response_content:
-                            # Enhanced response detection using new format
-                            if _is_final_response(status):
-                                print(f"Agent: {response_content}")
-                                break
-                            elif _is_processing_response(status):
-                                # Continue polling for actual result
-                                pass
-                            else:
-                                # Normal response
-                                print(f"Agent: {response_content}")
-                                break
 
-                        # Timeout after 30 seconds
-                        if time.time() - response_start > 30:
-                            print("Agent: (response timeout - no response available)")
-                            break
-                        time.sleep(0.5)
-                        status = get_status(api, wid)
-                    last_turns = turns
+            print("Agent: (generating response...)")
+            response_start = time.time()
+            # Optional: if your backend is slow to populate, give it a short grace
+            time.sleep(0.25)
+
+            while True:
+                status = get_status(api, wid)
+                resp = (status or {}).get("response") or {}
+                fp = _response_fingerprint(resp)
+
+                # Show only if it looks like new AND displayable
+                if fp and fp != session_last_seen_fp and _looks_displayable(resp):
+                    text = _extract_text_for_display(status).strip()
+                    if text:
+                        print(f"Agent: {text}")
+                        # Update session-wide fingerprint so we don't show this again
+                        session_last_seen_fp = fp
+                        # If the workflow says it's done, stop waiting; otherwise stop after first displayable message
+                        # (If you expect multi-chunk streaming via status, remove the 'break' and keep polling until done)
+                        break
+
+                # Timeout
+                if time.time() - response_start > 30:
+                    print("Agent: (response timeout - no response available)")
                     break
+
+                time.sleep(0.5)
     except KeyboardInterrupt:
         pass
     finally:
         # Send end conversation signal to terminate workflow
         end_conversation(api, wid)
-        end_chat(api, wid)
         print("\nChat ended.")
 
 

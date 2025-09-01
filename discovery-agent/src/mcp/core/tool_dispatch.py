@@ -82,7 +82,7 @@ async def tool_dispatch(call: ToolCall) -> StructuredToolResult:
 
 
 async def execute_mcp_tool(tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute an MCP tool with proper session management"""
+    """Execute an MCP tool using the MCP client manager"""
     if "." not in tool_name:
         raise ToolNotFoundError(f"Invalid MCP tool name format: {tool_name}")
 
@@ -98,12 +98,8 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any]) -> Dict[str, An
     server_config_with_name["name"] = server_name
 
     try:
-        # Get client and execute tool
-        client_config = await mcp_client_manager.get_client(server_config_with_name)
-
-        # Execute the tool using proper MCP session
-        result = await _execute_tool_with_session(server_config_with_name, actual_tool_name, args)
-
+        # Use the existing working MCP client manager method
+        result = await mcp_client_manager.execute_tool(server_config_with_name, actual_tool_name, args)
         return result
 
     except Exception as e:
@@ -122,99 +118,7 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any]) -> Dict[str, An
             raise ToolExecutionError(f"Tool '{tool_name}' execution failed: {str(e)}")
 
 
-async def _execute_tool_with_session(
-    server_config: Dict[str, Any],
-    tool_name: str,
-    args: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Execute tool using proper MCP session management"""
-    connection = _build_connection(server_config)
 
-    if connection["type"] == "stdio":
-        async with mcp_client_manager._stdio_connection(
-            command=connection.get("command", "python"),
-            args=connection.get("args", ["server.py"]),
-            env=connection.get("env", {}),
-        ) as (read, write):
-            from mcp import ClientSession
-
-            async with ClientSession(read, write) as session:
-                # Initialize the session
-                await session.initialize()
-
-                # Convert argument types for MCP tools
-                converted_args = _convert_args_types(args)
-
-                # Call the tool
-                result = await session.call_tool(tool_name, arguments=converted_args)
-
-                # Normalize the result
-                normalized_result = _normalize_result(result)
-
-                return {
-                    "tool": tool_name,
-                    "success": True,
-                    "content": normalized_result,
-                }
-
-    else:
-        raise ToolExecutionError(f"Unsupported connection type: {connection['type']}")
-
-
-def _build_connection(server_definition: Dict[str, Any]) -> Dict[str, Any]:
-    """Build connection parameters from server definition"""
-    return {
-        "type": server_definition.get("type", "stdio"),
-        "command": server_definition.get("command", "python"),
-        "args": server_definition.get("args", ["server.py"]),
-        "env": server_definition.get("env", {}) or {},
-    }
-
-
-def _normalize_result(result: Any) -> Any:
-    """Normalize MCP tool result for serialization"""
-    if hasattr(result, "content"):
-        # Handle MCP result objects
-        content = result.content
-        if hasattr(content, "__iter__") and not isinstance(content, str):
-            try:
-                # Convert to list if it's iterable
-                content_list = list(content)
-                return [
-                    item.text if hasattr(item, "text") else str(item)
-                    for item in content_list
-                ]
-            except (TypeError, AttributeError):
-                # If conversion fails, return as string
-                return str(content)
-        return str(content)
-    return result
-
-
-def _convert_args_types(tool_args: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert string arguments to appropriate types for MCP tools"""
-    converted_args = {}
-
-    for key, value in tool_args.items():
-        if isinstance(value, str):
-            # Try to convert string values to appropriate types
-            if value.isdigit():
-                # Convert numeric strings to integers
-                converted_args[key] = int(value)
-            elif value.replace(".", "").isdigit() and value.count(".") == 1:
-                # Convert decimal strings to floats
-                converted_args[key] = float(value)
-            elif value.lower() in ("true", "false"):
-                # Convert boolean strings
-                converted_args[key] = value.lower() == "true"
-            else:
-                # Keep as string
-                converted_args[key] = value
-        else:
-            # Keep non-string values as-is
-            converted_args[key] = value
-
-    return converted_args
 
 
 @activity.defn

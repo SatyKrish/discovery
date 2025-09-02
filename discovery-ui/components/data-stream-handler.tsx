@@ -18,17 +18,18 @@ export function DataStreamHandler() {
     lastProcessedIndex.current = dataStream.length - 1;
 
     newDeltas.forEach((delta) => {
-      const artifactDefinition = artifactDefinitions.find(
-        (artifactDefinition) => artifactDefinition.kind === artifact.kind,
-      );
+      // TODO: Implement artifact definitions
+      // const artifactDefinition = artifactDefinitions.find(
+      //   (artifactDefinition) => artifactDefinition.kind === artifact.kind,
+      // );
 
-      if (artifactDefinition?.onStreamPart) {
-        artifactDefinition.onStreamPart({
-          streamPart: delta,
-          setArtifact,
-          setMetadata,
-        });
-      }
+      // if (artifactDefinition && 'onStreamPart' in artifactDefinition && artifactDefinition.onStreamPart) {
+      //   artifactDefinition.onStreamPart({
+      //     streamPart: delta,
+      //     setArtifact,
+      //     setMetadata,
+      //   });
+      // }
 
       setArtifact((draftArtifact) => {
         if (!draftArtifact) {
@@ -39,21 +40,21 @@ export function DataStreamHandler() {
           case 'data-id':
             return {
               ...draftArtifact,
-              documentId: delta.data,
+              documentId: delta.data as string,
               status: 'streaming',
             };
 
           case 'data-title':
             return {
               ...draftArtifact,
-              title: delta.data,
+              title: delta.data as string,
               status: 'streaming',
             };
 
           case 'data-kind':
             return {
               ...draftArtifact,
-              kind: delta.data,
+              kind: delta.data as 'text' | 'code' | 'image' | 'sheet',
               status: 'streaming',
             };
 

@@ -49,10 +49,10 @@ function PureChatHeader({
   };
 
   return (
-    <header className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border py-3 px-4 md:px-6 z-10">
+    <header className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border py-3 px-3 md:px-4 z-10">
       <div className="flex items-center justify-between w-full max-w-none">
         {/* Left side - Toggle + Logo + Title */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <SidebarToggle />
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
             <span className="text-white text-sm font-bold">AI</span>

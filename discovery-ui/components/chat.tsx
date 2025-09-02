@@ -5,7 +5,6 @@ import { useChat } from '@ai-sdk/react';
 import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
-import { Sidebar } from '@/components/sidebar';
 import type { Vote } from '@/lib/db/schema';
 import { fetcher, fetchWithErrorHandlers, generateUUID, cn } from '@/lib/utils';
 import { Artifact } from './artifact';
@@ -13,8 +12,6 @@ import { MultimodalInput } from './multimodal-input';
 import { Messages } from './messages';
 import type { VisibilityType } from './visibility-selector';
 import { useArtifactSelector } from '@/hooks/use-artifact';
-import { unstable_serialize } from 'swr/infinite';
-import { getChatHistoryPaginationKey } from './sidebar-history';
 import { toast } from './toast';
 import type { Session } from 'next-auth';
 import { useSearchParams } from 'next/navigation';
@@ -83,7 +80,7 @@ export function Chat({
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
     },
     onFinish: () => {
-      mutate(unstable_serialize(getChatHistoryPaginationKey));
+      // Removed sidebar history mutation
     },
     onError: (error) => {
       if (error instanceof ChatSDKError) {
@@ -120,10 +117,6 @@ export function Chat({
   const [attachments, setAttachments] = useState<Array<Attachment>>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
-  // Sidebar state management
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [chats, setChats] = useState<Array<{ id: string; title: string; lastActivity?: string }>>([]);
-
   useAutoResume({
     autoResume,
     initialMessages,
@@ -131,39 +124,8 @@ export function Chat({
     setMessages,
   });
 
-  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
-
-  const handleNewChat = () => {
-    // Generate a new chat ID and navigate to it
-    const newChatId = generateUUID();
-    window.location.href = `/chat/${newChatId}`;
-  };
-
-  const handleSelectChat = (chatId: string) => {
-    if (chatId !== id) {
-      window.location.href = `/chat/${chatId}`;
-    }
-  };
-
-  const handleDeleteChat = (chatId: string) => {
-    // For now, just remove from local state
-    setChats(prev => prev.filter(chat => chat.id !== chatId));
-  };
-
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <Sidebar
-        chats={chats}
-        selectedChatId={id}
-        onSelectChat={handleSelectChat}
-        onNewChat={handleNewChat}
-        onDeleteChat={handleDeleteChat}
-        isOpen={sidebarOpen}
-        onToggle={toggleSidebar}
-        isLoading={false}
-      />
-
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Header - spans full width */}
@@ -174,8 +136,6 @@ export function Chat({
             isReadonly={isReadonly}
             session={session}
             selectedModelId={initialChatModel}
-            onToggleSidebar={toggleSidebar}
-            sidebarOpen={sidebarOpen}
           />
         </div>
 

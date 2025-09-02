@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useEffect, useState } from 'react';
-import { Moon, Sun, Monitor, Menu } from 'lucide-react';
+import { Moon, Sun, Monitor } from 'lucide-react';
 import { Button } from './ui/button';
 import { useTheme } from './theme-provider';
 import type { VisibilityType } from './visibility-selector';
@@ -13,16 +13,12 @@ function PureChatHeader({
   isReadonly,
   session,
   selectedModelId,
-  onToggleSidebar,
-  sidebarOpen = false,
 }: {
   chatId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
   session: Session;
   selectedModelId: string;
-  onToggleSidebar?: () => void;
-  sidebarOpen?: boolean;
 }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -56,17 +52,6 @@ function PureChatHeader({
       <div className="flex items-center justify-between w-full max-w-none">
         {/* Left side - Logo and title */}
         <div className="flex items-center gap-3 min-w-0">
-          {onToggleSidebar && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onToggleSidebar}
-              className="h-8 w-8 md:hidden shrink-0"
-              aria-label="Toggle sidebar"
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-          )}
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
             <span className="text-white text-sm font-bold">AI</span>
           </div>

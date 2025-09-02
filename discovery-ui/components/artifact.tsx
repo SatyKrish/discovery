@@ -14,7 +14,7 @@ import { fetcher } from '@/lib/utils';
 import { MultimodalInput } from './multimodal-input';
 import { Toolbar } from './toolbar';
 import { VersionFooter } from './version-footer';
-import { useSidebar } from './ui/sidebar';
+
 import { useArtifact } from '@/hooks/use-artifact';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { VisibilityType } from './visibility-selector';
@@ -92,7 +92,7 @@ function PureArtifact({
   const [document, setDocument] = useState<Document | null>(null);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
 
-  const { open: isSidebarOpen } = useSidebar();
+  const isSidebarOpen = false; // Sidebar removed
 
   useEffect(() => {
     if (documents && documents.length > 0) {

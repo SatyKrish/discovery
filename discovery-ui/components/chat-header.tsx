@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Moon, Sun, Monitor } from 'lucide-react';
 import { Button } from './ui/button';
 import { useTheme } from './theme-provider';
@@ -21,7 +21,12 @@ function PureChatHeader({
   selectedModelId: string;
 }) {
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const currentModel = selectedModelId === 'gpt-4' ? 'GPT-4' : 'GPT-3.5 Turbo';
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const toggleTheme = () => {
     if (theme === 'light') {
@@ -34,6 +39,9 @@ function PureChatHeader({
   };
 
   const getThemeIcon = () => {
+    // Prevent hydration mismatch by showing system icon until mounted
+    if (!mounted) return <Monitor className="h-4 w-4" />;
+
     if (theme === 'light') return <Sun className="h-4 w-4" />;
     if (theme === 'dark') return <Moon className="h-4 w-4" />;
     return <Monitor className="h-4 w-4" />;

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Turbopack configuration removed - not needed for standard Next.js setup
+  // Next.js app directory is in the root
 };
 
 export default nextConfig;

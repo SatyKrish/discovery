@@ -28,18 +28,21 @@ export function ThemeProvider({
   storageKey = 'vite-ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => {
-      if (typeof window !== 'undefined') {
-        return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
-      }
-      return defaultTheme;
-    },
-  );
+  const [theme, setTheme] = useState<Theme>(defaultTheme);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const root = window.document.documentElement;
+    setMounted(true);
+    const storedTheme = localStorage.getItem(storageKey) as Theme;
+    if (storedTheme) {
+      setTheme(storedTheme);
+    }
+  }, [storageKey]);
 
+  useEffect(() => {
+    if (!mounted) return;
+
+    const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
 
     if (theme === 'system') {
@@ -47,13 +50,12 @@ export function ThemeProvider({
         .matches
         ? 'dark'
         : 'light';
-
       root.classList.add(systemTheme);
       return;
     }
 
     root.classList.add(theme);
-  }, [theme]);
+  }, [theme, mounted]);
 
   const value = {
     theme,

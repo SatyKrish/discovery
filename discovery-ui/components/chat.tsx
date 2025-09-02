@@ -61,7 +61,6 @@ export function Chat({
     generateId: generateUUID,
     transport: new DefaultChatTransport({
       api: '/api/chat',
-      fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest({ messages, id, body }) {
         return {
           body: {

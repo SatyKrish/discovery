@@ -119,7 +119,7 @@ function PureMultimodalInput({
       role: 'user',
       parts: [
         ...attachments.map((attachment) => ({
-          type: 'file',
+          type: 'file' as const,
           url: attachment.url,
           name: attachment.name,
           mediaType: attachment.contentType,
@@ -301,7 +301,6 @@ function PureMultimodalInput({
             <StopButton stop={stop} setMessages={setMessages} />
           ) : (
             <PromptInputSubmit
-              status={status}
               disabled={!input.trim() || uploadQueue.length > 0}
               className="p-3 text-primary-foreground bg-primary rounded-full hover:bg-primary/90"
             >

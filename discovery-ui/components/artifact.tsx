@@ -20,9 +20,10 @@ import type { UseChatHelpers } from '@ai-sdk/react';
 import type { VisibilityType } from './visibility-selector';
 import equal from 'fast-deep-equal';
 import type { Attachment, ChatMessage } from '@/lib/types';
+import { textArtifact } from '@/artifacts/text/client';
 
 export const artifactDefinitions = [
-  // Will be populated with actual artifact definitions
+  textArtifact,
 ];
 
 export type ArtifactKind = 'text' | 'code' | 'image' | 'sheet';
@@ -403,11 +404,25 @@ function PureArtifact({
             </div>
 
             <div className="dark:bg-muted bg-background h-full overflow-y-scroll !max-w-full items-center">
-              <div className="p-4">
-                <div className="text-sm text-muted-foreground">
-                  Artifact content will be displayed here
-                </div>
-              </div>
+              <artifactDefinition.content
+                title={artifact.title}
+                content={
+                  isCurrentVersion
+                    ? artifact.content
+                    : getDocumentContentById(currentVersionIndex)
+                }
+                mode={mode}
+                status={artifact.status}
+                currentVersionIndex={currentVersionIndex}
+                suggestions={[]}
+                onSaveContent={saveContent}
+                isInline={false}
+                isCurrentVersion={isCurrentVersion}
+                getDocumentContentById={getDocumentContentById}
+                isLoading={isDocumentsFetching && !artifact.content}
+                metadata={metadata}
+                setMetadata={setMetadata}
+              />
 
               <AnimatePresence>
                 {isCurrentVersion && (

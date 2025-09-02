@@ -2,6 +2,14 @@ import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
+import { cookies } from 'next/headers';
+import { AppSidebar } from '@/components/app-sidebar';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { auth } from './(auth)/auth';
+import Script from 'next/script';
+import { DataStreamProvider } from '@/components/data-stream-provider';
+import { DataStreamHandler } from '@/components/data-stream-handler';
+import { MockSessionProvider } from '@/components/mock-session-provider';
 
 import './globals.css';
 
@@ -52,6 +60,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [session, cookieStore] = await Promise.all([auth(), cookies()]);
+  const isCollapsed = cookieStore.get('sidebar:state')?.value !== 'true';
+
   return (
     <html
       lang="en"
@@ -68,14 +79,28 @@ export default async function RootLayout({
             __html: THEME_COLOR_SCRIPT,
           }}
         />
+        <Script
+          src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"
+          strategy="beforeInteractive"
+        />
       </head>
       <body className="antialiased">
-        <ThemeProvider
-          defaultTheme="system"
-        >
-          <Toaster position="top-center" />
-          {children}
-        </ThemeProvider>
+        <MockSessionProvider>
+          <ThemeProvider
+            defaultTheme="system"
+          >
+            <DataStreamProvider>
+              <SidebarProvider defaultOpen={!isCollapsed}>
+                <AppSidebar user={session?.user} />
+                <SidebarInset>
+                  <Toaster position="top-center" />
+                  {children}
+                </SidebarInset>
+              </SidebarProvider>
+              <DataStreamHandler />
+            </DataStreamProvider>
+          </ThemeProvider>
+        </MockSessionProvider>
       </body>
     </html>
   );

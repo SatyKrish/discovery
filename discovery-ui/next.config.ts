@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Next.js app directory is in the root
+  // Air-gapped deployment - no external image calls
 };
 
 export default nextConfig;

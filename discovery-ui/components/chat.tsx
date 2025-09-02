@@ -38,10 +38,8 @@ export function Chat({
   session: Session;
   autoResume: boolean;
 }) {
-  const { visibilityType } = useChatVisibility({
-    chatId: id,
-    initialVisibilityType,
-  });
+  // Mock visibility type since database is removed
+  const visibilityType = initialVisibilityType;
 
   const { mutate } = useSWRConfig();
   const { setDataStream } = useDataStream();
@@ -76,9 +74,9 @@ export function Chat({
         };
       },
     }),
-    onData: (dataPart) => {
-      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
-    },
+    // onData: (dataPart) => {
+    //   setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+    // },
     onFinish: () => {
       // Removed sidebar history mutation
     },
@@ -109,10 +107,8 @@ export function Chat({
     }
   }, [query, sendMessage, hasAppendedQuery, id]);
 
-  const { data: votes } = useSWR<Array<Vote>>(
-    messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
-    fetcher,
-  );
+  // Mock votes data since database is removed
+  const votes: Array<Vote> | undefined = undefined;
 
   const [attachments, setAttachments] = useState<Array<Attachment>>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);

@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { useTheme } from './theme-provider';
 import type { VisibilityType } from './visibility-selector';
 import type { Session } from 'next-auth';
+import { SidebarToggle } from './sidebar-toggle';
 
 function PureChatHeader({
   chatId,
@@ -50,13 +51,14 @@ function PureChatHeader({
   return (
     <header className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border py-3 px-4 md:px-6 z-10">
       <div className="flex items-center justify-between w-full max-w-none">
-        {/* Left side - Logo and title */}
+        {/* Left side - Toggle + Logo + Title */}
         <div className="flex items-center gap-3 min-w-0">
+          <SidebarToggle />
           <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
             <span className="text-white text-sm font-bold">AI</span>
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-foreground truncate">Discovery AI</h1>
+            <h1 className="text-lg font-semibold text-foreground truncate">Discovery</h1>
             <p className="text-xs text-muted-foreground hidden sm:block">AI-powered workflow assistant</p>
           </div>
         </div>

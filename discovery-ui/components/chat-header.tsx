@@ -54,7 +54,7 @@ function PureChatHeader({
       <div className="flex items-center justify-between w-full max-w-none">
         {/* Left side - Toggle + Logo + Title */}
         <div className="flex items-center gap-2 min-w-0">
-          <SidebarToggle />
+          <SidebarToggle position="header" />
           <Logo />
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-foreground truncate">Discovery</h1>

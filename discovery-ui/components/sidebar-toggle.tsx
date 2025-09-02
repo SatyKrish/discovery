@@ -5,8 +5,22 @@ import { Button } from '@/components/ui/button';
 import { useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-export function SidebarToggle() {
-  const { toggleSidebar } = useSidebar();
+interface SidebarToggleProps {
+  position?: 'header' | 'sidebar';
+}
+
+export function SidebarToggle({ position = 'header' }: SidebarToggleProps) {
+  const { toggleSidebar, state } = useSidebar();
+
+  // When position is 'sidebar', only show when sidebar is expanded
+  if (position === 'sidebar' && state === 'collapsed') {
+    return null;
+  }
+
+  // When position is 'header', only show when sidebar is collapsed
+  if (position === 'header' && state === 'expanded') {
+    return null;
+  }
 
   return (
     <Tooltip>

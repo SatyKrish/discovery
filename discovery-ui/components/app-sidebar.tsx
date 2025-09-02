@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { SidebarHistory } from '@/components/sidebar-history';
+import { SidebarToggle } from '@/components/sidebar-toggle';
 import { SidebarUserNav } from '@/components/sidebar-user-nav';
 import {
   Sidebar,
@@ -49,6 +50,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 Chats
               </span>
             </Link>
+            <SidebarToggle position="sidebar" />
           </div>
         </SidebarMenu>
       </SidebarHeader>

@@ -8,8 +8,11 @@ import os
 import json
 import pytest
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+# Add src to path for robust imports
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+src_path = os.path.join(project_root, 'src')
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
 
 def test_mcp_result_processing_basic():

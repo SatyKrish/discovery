@@ -9,11 +9,34 @@ import os
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+# Add src to path for robust imports
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+src_path = os.path.join(project_root, 'src')
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
-from src.models import ToolCall, StructuredToolResult
-from src.mcp.core.tool_dispatch import execute_mcp_tool, tool_dispatch, ToolNotFoundError, ToolExecutionError
+try:
+    from src.models import ToolCall, StructuredToolResult
+    from src.mcp.core.tool_dispatch import execute_mcp_tool, tool_dispatch, ToolNotFoundError, ToolExecutionError
+except ImportError:
+    # Fallback for different environments
+    import importlib.util
+
+    # Load models
+    spec = importlib.util.spec_from_file_location("models", os.path.join(src_path, "models.py"))
+    models_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(models_module)
+    ToolCall = models_module.ToolCall
+    StructuredToolResult = models_module.StructuredToolResult
+
+    # Load tool_dispatch
+    spec = importlib.util.spec_from_file_location("tool_dispatch", os.path.join(src_path, "mcp", "core", "tool_dispatch.py"))
+    tool_dispatch_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool_dispatch_module)
+    execute_mcp_tool = tool_dispatch_module.execute_mcp_tool
+    tool_dispatch = tool_dispatch_module.tool_dispatch
+    ToolNotFoundError = tool_dispatch_module.ToolNotFoundError
+    ToolExecutionError = tool_dispatch_module.ToolExecutionError
 
 
 @pytest.mark.skip(reason="Integration test requiring MCP servers running - disabled for unit test focus")

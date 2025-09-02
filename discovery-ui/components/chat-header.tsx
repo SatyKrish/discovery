@@ -58,7 +58,7 @@ function PureChatHeader({
           <Logo />
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-foreground truncate">Discovery</h1>
-            <p className="text-xs text-muted-foreground hidden sm:block">AI-powered workflow assistant</p>
+            <p className="text-xs text-muted-foreground hidden sm:block">AI-powered Deep Research Agent</p>
           </div>
         </div>
 

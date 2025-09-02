@@ -46,7 +46,6 @@ type GroupedChats = {
 };
 
 type DateFilter = 'all' | 'today' | 'week' | 'month';
-type VisibilityFilter = 'all' | 'private' | 'public';
 
 export interface ChatHistory {
   chats: Array<Chat>;
@@ -98,7 +97,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all');
 
   // Enhanced filtering logic
   const filteredChats = useMemo(() => {
@@ -135,13 +133,8 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
       filtered = filtered.filter((chat) => new Date(chat.createdAt) >= filterDate);
     }
 
-    // Visibility filter
-    if (visibilityFilter !== 'all') {
-      filtered = filtered.filter((chat) => chat.visibility === visibilityFilter);
-    }
-
     return filtered;
-  }, [chatHistory?.chats, searchQuery, dateFilter, visibilityFilter]);
+  }, [chatHistory?.chats, searchQuery, dateFilter]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -277,7 +270,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                     <FilterIcon className="h-4 w-4" />
                     Filters
                   </div>
-                  {(dateFilter !== 'all' || visibilityFilter !== 'all') && (
+                  {dateFilter !== 'all' && (
                     <div className="w-2 h-2 bg-primary rounded-full" />
                   )}
                 </Button>
@@ -297,18 +290,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                       <option value="month">Last 30 days</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Visibility</label>
-                    <select
-                      value={visibilityFilter}
-                      onChange={(e) => setVisibilityFilter(e.target.value as VisibilityFilter)}
-                      className="w-full mt-1 px-2 py-1 text-sm border rounded"
-                    >
-                      <option value="all">All chats</option>
-                      <option value="private">Private</option>
-                      <option value="public">Public</option>
-                    </select>
-                  </div>
+
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>

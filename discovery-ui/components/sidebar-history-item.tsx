@@ -113,6 +113,12 @@ const PureChatItem = ({
 };
 
 export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
-  if (prevProps.isActive !== nextProps.isActive) return false;
-  return true;
+  // Only re-render if these specific props change
+  return (
+    prevProps.chat.id === nextProps.chat.id &&
+    prevProps.isActive === nextProps.isActive &&
+    prevProps.chat.title === nextProps.chat.title &&
+    prevProps.chat.createdAt === nextProps.chat.createdAt &&
+    prevProps.chat.visibility === nextProps.chat.visibility
+  );
 });

@@ -27,10 +27,16 @@ import type { Chat } from '@/lib/db/schema';
 import { fetcher } from '@/lib/utils';
 import { ChatItem } from './sidebar-history-item';
 import useSWR from 'swr';
-import { LoaderIcon, SearchIcon, PlusIcon } from './icons';
+import { LoaderIcon, SearchIcon, PlusIcon, FilterIcon, MessageSquareIcon } from './icons';
 import { mockDb } from '@/lib/mock-db';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 type GroupedChats = {
   today: Chat[];
   yesterday: Chat[];
@@ -38,6 +44,9 @@ type GroupedChats = {
   lastMonth: Chat[];
   older: Chat[];
 };
+
+type DateFilter = 'all' | 'today' | 'week' | 'month';
+type VisibilityFilter = 'all' | 'private' | 'public';
 
 export interface ChatHistory {
   chats: Array<Chat>;
@@ -88,21 +97,51 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all');
 
-  // Filter chats based on search query - must be called before any conditional returns
+  // Enhanced filtering logic
   const filteredChats = useMemo(() => {
     if (!chatHistory?.chats) {
       return [];
     }
 
-    if (!searchQuery.trim()) {
-      return chatHistory.chats;
+    let filtered = chatHistory.chats;
+
+    // Text search
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((chat) =>
+        chat.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     }
 
-    return chatHistory.chats.filter((chat) =>
-      chat.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [chatHistory?.chats, searchQuery]);
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = new Date();
+
+      switch (dateFilter) {
+        case 'today':
+          filterDate.setHours(0, 0, 0, 0);
+          break;
+        case 'week':
+          filterDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          filterDate.setMonth(now.getMonth() - 1);
+          break;
+      }
+
+      filtered = filtered.filter((chat) => new Date(chat.createdAt) >= filterDate);
+    }
+
+    // Visibility filter
+    if (visibilityFilter !== 'all') {
+      filtered = filtered.filter((chat) => chat.visibility === visibilityFilter);
+    }
+
+    return filtered;
+  }, [chatHistory?.chats, searchQuery, dateFilter, visibilityFilter]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -136,6 +175,19 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     );
   }
 
+  // Enhanced loading skeleton component
+  function ChatSkeleton() {
+    return (
+      <div className="flex gap-2 items-center px-2 h-10 rounded-md">
+        <div className="w-6 h-6 bg-muted-foreground/20 rounded animate-pulse" />
+        <div className="flex-1 space-y-1">
+          <div className="h-4 bg-muted-foreground/20 rounded animate-pulse w-3/4" />
+          <div className="h-3 bg-muted-foreground/20 rounded animate-pulse w-1/2" />
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <SidebarGroup>
@@ -143,21 +195,9 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
           Today
         </div>
         <SidebarGroupContent>
-          <div className="flex flex-col">
-            {[44, 32, 28, 64, 52].map((item) => (
-              <div
-                key={item}
-                className="flex gap-2 items-center px-2 h-8 rounded-md"
-              >
-                <div
-                  className="h-4 rounded-md flex-1 max-w-[--skeleton-width] bg-sidebar-accent-foreground/10"
-                  style={
-                    {
-                      '--skeleton-width': `${item}%`,
-                    } as React.CSSProperties
-                  }
-                />
-              </div>
+          <div className="flex flex-col gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <ChatSkeleton key={i} />
             ))}
           </div>
         </SidebarGroupContent>
@@ -169,8 +209,26 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     return (
       <SidebarGroup>
         <SidebarGroupContent>
-          <div className="flex flex-row gap-2 justify-center items-center px-2 w-full text-sm text-zinc-500">
-            Your conversations will appear here once you start chatting!
+          <div className="flex flex-col gap-2 justify-center items-center px-2 py-8 text-center">
+            <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+              <MessageSquareIcon className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-medium">No chats yet</h3>
+              <p className="text-xs text-muted-foreground">
+                Start a conversation to see your chat history here
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                const newChatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                router.push(`/chat/${newChatId}`);
+              }}
+              className="mt-2"
+              size="sm"
+            >
+              Start chatting
+            </Button>
           </div>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -199,8 +257,8 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
             </Button>
           </div>
 
-          {/* Search Input */}
-          <div className="px-2 py-2">
+          {/* Search and Filters */}
+          <div className="px-2 py-2 space-y-2">
             <div className="relative">
               <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -210,6 +268,50 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                 className="pl-9 h-8 bg-background border-sidebar-border focus-visible:ring-sidebar-ring"
               />
             </div>
+
+            {/* Filter Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full justify-between">
+                  <div className="flex items-center gap-2">
+                    <FilterIcon className="h-4 w-4" />
+                    Filters
+                  </div>
+                  {(dateFilter !== 'all' || visibilityFilter !== 'all') && (
+                    <div className="w-2 h-2 bg-primary rounded-full" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <div className="p-2 space-y-2">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Date</label>
+                    <select
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+                      className="w-full mt-1 px-2 py-1 text-sm border rounded"
+                    >
+                      <option value="all">All time</option>
+                      <option value="today">Today</option>
+                      <option value="week">Last 7 days</option>
+                      <option value="month">Last 30 days</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Visibility</label>
+                    <select
+                      value={visibilityFilter}
+                      onChange={(e) => setVisibilityFilter(e.target.value as VisibilityFilter)}
+                      className="w-full mt-1 px-2 py-1 text-sm border rounded"
+                    >
+                      <option value="all">All chats</option>
+                      <option value="private">Private</option>
+                      <option value="public">Public</option>
+                    </select>
+                  </div>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <SidebarMenu>

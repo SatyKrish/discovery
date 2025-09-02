@@ -2,6 +2,7 @@
 
 import type { User } from 'next-auth';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 import { SidebarHistory } from '@/components/sidebar-history';
 import { SidebarUserNav } from '@/components/sidebar-user-nav';
@@ -17,7 +18,20 @@ import Link from 'next/link';
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, toggleSidebar } = useSidebar();
+
+  // Add keyboard shortcut support (Cmd/Ctrl + B to toggle sidebar)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'b' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        toggleSidebar();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSidebar]);
 
   return (
     <Sidebar className="group-data-[side=left]:border-r-0">

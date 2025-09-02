@@ -279,3 +279,43 @@ export const SearchIcon = forwardRef<SVGSVGElement, React.SVGProps<SVGSVGElement
   )
 );
 SearchIcon.displayName = 'SearchIcon';
+
+export const FilterIcon = forwardRef<SVGSVGElement, React.SVGProps<SVGSVGElement>>(
+  (props, ref) => (
+    <svg
+      ref={ref}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  )
+);
+FilterIcon.displayName = 'FilterIcon';
+
+export const MessageSquareIcon = forwardRef<SVGSVGElement, React.SVGProps<SVGSVGElement>>(
+  (props, ref) => (
+    <svg
+      ref={ref}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+);
+MessageSquareIcon.displayName = 'MessageSquareIcon';

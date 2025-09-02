@@ -22,11 +22,7 @@ import {
   PromptInputToolbar,
   PromptInputTools,
   PromptInputSubmit,
-  PromptInputModelSelect,
-  PromptInputModelSelectTrigger,
-  PromptInputModelSelectContent,
 } from './elements/prompt-input';
-import { SelectItem, SelectValue } from './ui/select';
 import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -34,8 +30,6 @@ import { ArrowDown } from 'lucide-react';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import type { VisibilityType } from './visibility-selector';
 import type { Attachment, ChatMessage } from '@/lib/types';
-import { chatModels } from '@/lib/ai/models';
-import { saveChatModelAsCookie } from '@/app/(chat)/actions';
 import { startTransition } from 'react';
 
 function PureMultimodalInput({
@@ -302,7 +296,6 @@ function PureMultimodalInput({
         <PromptInputToolbar className="px-4 py-2 !border-t-0 !border-top-0 shadow-none dark:!border-transparent dark:border-0">
           <PromptInputTools className="gap-2">
             <AttachmentsButton fileInputRef={fileInputRef} status={status} />
-            <ModelSelectorCompact selectedModelId={selectedModelId} />
           </PromptInputTools>
           {status === 'submitted' ? (
             <StopButton stop={stop} setMessages={setMessages} />
@@ -329,7 +322,6 @@ export const MultimodalInput = memo(
     if (!equal(prevProps.attachments, nextProps.attachments)) return false;
     if (prevProps.selectedVisibilityType !== nextProps.selectedVisibilityType)
       return false;
-    if (prevProps.selectedModelId !== nextProps.selectedModelId) return false;
 
     return true;
   },
@@ -360,53 +352,7 @@ function PureAttachmentsButton({
 
 const AttachmentsButton = memo(PureAttachmentsButton);
 
-function PureModelSelectorCompact({
-  selectedModelId,
-}: {
-  selectedModelId: string;
-}) {
-  const [optimisticModelId, setOptimisticModelId] = useState(selectedModelId);
 
-  const selectedModel = chatModels.find(
-    (model) => model.id === optimisticModelId,
-  );
-
-  return (
-    <PromptInputModelSelect
-      value={selectedModel?.name}
-      onValueChange={(modelName) => {
-        const model = chatModels.find((m) => m.name === modelName);
-        if (model) {
-          setOptimisticModelId(model.id);
-          startTransition(() => {
-            saveChatModelAsCookie(model.id);
-          });
-        }
-      }}
-    >
-      <PromptInputModelSelectTrigger
-        type="button"
-        className="text-xs focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=closed]:ring-0"
-      >
-        {selectedModel?.name || 'Select model'}
-      </PromptInputModelSelectTrigger>
-      <PromptInputModelSelectContent>
-        {chatModels.map((model) => (
-          <SelectItem key={model.id} value={model.name}>
-            <div className="flex flex-col gap-1 items-start py-1">
-              <div className="font-medium">{model.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {model.description}
-              </div>
-            </div>
-          </SelectItem>
-        ))}
-      </PromptInputModelSelectContent>
-    </PromptInputModelSelect>
-  );
-}
-
-const ModelSelectorCompact = memo(PureModelSelectorCompact);
 
 function PureStopButton({
   stop,

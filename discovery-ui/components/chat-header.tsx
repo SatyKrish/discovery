@@ -1,6 +1,9 @@
 'use client';
 
 import { memo } from 'react';
+import { Moon, Sun, Monitor } from 'lucide-react';
+import { Button } from './ui/button';
+import { useTheme } from './theme-provider';
 import type { VisibilityType } from './visibility-selector';
 import type { Session } from 'next-auth';
 
@@ -17,7 +20,24 @@ function PureChatHeader({
   session: Session;
   selectedModelId: string;
 }) {
+  const { theme, setTheme } = useTheme();
   const currentModel = selectedModelId === 'gpt-4' ? 'GPT-4' : 'GPT-3.5 Turbo';
+
+  const toggleTheme = () => {
+    if (theme === 'light') {
+      setTheme('dark');
+    } else if (theme === 'dark') {
+      setTheme('system');
+    } else {
+      setTheme('light');
+    }
+  };
+
+  const getThemeIcon = () => {
+    if (theme === 'light') return <Sun className="h-4 w-4" />;
+    if (theme === 'dark') return <Moon className="h-4 w-4" />;
+    return <Monitor className="h-4 w-4" />;
+  };
 
   return (
     <header className="flex sticky top-0 bg-background py-1.5 items-center px-2 md:px-2 gap-2">
@@ -26,10 +46,18 @@ function PureChatHeader({
           <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
             <span className="text-white text-xs font-bold">AI</span>
           </div>
-          <h1 className="text-xl font-semibold">Discovery AI</h1>
+          <h1 className="text-xl font-semibold text-foreground">Discovery AI</h1>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-md text-xs">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleTheme}
+            className="h-8 w-8 p-0"
+          >
+            {getThemeIcon()}
+          </Button>
+          <span className="px-2 py-1 bg-muted rounded-md text-xs">
             {currentModel}
           </span>
           <span>Workflow: {chatId.slice(0, 8)}...</span>

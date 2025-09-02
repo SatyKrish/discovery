@@ -104,6 +104,7 @@ function PureMultimodalInput({
   }, [input, setLocalStorageInput]);
 
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    console.log('handleInput called with value:', event.target.value);
     setInput(event.target.value);
   };
 
@@ -254,7 +255,7 @@ function PureMultimodalInput({
       />
 
       <PromptInput
-        className="bg-gray-50 rounded-3xl border border-gray-300 shadow-none transition-all duration-200 dark:bg-sidebar dark:border-sidebar-border hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/50"
+        className="bg-muted/50 rounded-3xl border shadow-none transition-all duration-200 hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/50"
         onSubmit={(event) => {
           event.preventDefault();
           if (status !== 'ready') {
@@ -303,7 +304,7 @@ function PureMultimodalInput({
             <PromptInputSubmit
               status={status}
               disabled={!input.trim() || uploadQueue.length > 0}
-              className="p-3 text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300 dark:bg-sidebar-accent dark:hover:bg-sidebar-accent/80 dark:text-gray-300"
+              className="p-3 text-primary-foreground bg-primary rounded-full hover:bg-primary/90"
             >
               <ArrowUpIcon size={20} />
             </PromptInputSubmit>

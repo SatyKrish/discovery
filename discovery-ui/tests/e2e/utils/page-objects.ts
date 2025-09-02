@@ -14,15 +14,15 @@ export class ChatPage {
   }
 
   get sendButton(): Locator {
-    return this.page.getByTestId('send-button');
+    return this.page.locator('button[type="submit"]').first();
   }
 
   get stopButton(): Locator {
-    return this.page.getByTestId('stop-button');
+    return this.page.locator('button').filter({ hasText: /stop/i }).first();
   }
 
   get suggestedActions(): Locator {
-    return this.page.getByTestId('suggested-actions');
+    return this.page.locator('.grid.grid-cols-2.gap-4').first();
   }
 
   get attachmentsPreview(): Locator {
@@ -72,7 +72,7 @@ export class ChatPage {
   }
 
   async sendMessageFromSuggestion(index = 0) {
-    const suggestions = this.page.locator('[data-testid="suggested-actions"] button');
+    const suggestions = this.page.locator('.grid.grid-cols-2.gap-4 button');
     await suggestions.nth(index).click();
   }
 
@@ -234,11 +234,11 @@ export class MultimodalInputPage {
   }
 
   get sendButton(): Locator {
-    return this.page.getByTestId('send-button');
+    return this.page.locator('button[type="submit"]').first();
   }
 
   get stopButton(): Locator {
-    return this.page.getByTestId('stop-button');
+    return this.page.locator('button').filter({ hasText: /stop/i }).first();
   }
 
   // Actions

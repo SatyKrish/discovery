@@ -12,7 +12,9 @@ test.describe('Basic Chat Functionality', () => {
   });
 
   test('should load the chat page successfully', async ({ page }) => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await page.goto(`/chat/${chatId}`);
 
     // Check that main elements are present
     await expect(chatPage.inputField).toBeVisible();
@@ -21,7 +23,9 @@ test.describe('Basic Chat Functionality', () => {
   });
 
   test('should send a user message and receive response', async ({ page }) => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await page.goto(`/chat/${chatId}`);
 
     // Mock the chat API response
     await page.route('/api/chat', async route => {
@@ -52,7 +56,9 @@ data: [DONE]`,
   });
 
   test('should redirect to chat URL after sending message', async ({ page }) => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await page.goto(`/chat/${chatId}`);
 
     // Mock the chat API
     await page.route('/api/chat', async route => {
@@ -75,7 +81,9 @@ data: [DONE]`,
   });
 
   test('should show suggested actions on initial load', async () => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await chatPage.page.goto(`/chat/${chatId}`);
 
     await expect(chatPage.suggestedActions).toBeVisible();
 
@@ -85,7 +93,9 @@ data: [DONE]`,
   });
 
   test('should send message from suggested action', async ({ page }) => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await page.goto(`/chat/${chatId}`);
 
     // Mock the chat API
     await page.route('/api/chat', async route => {
@@ -112,7 +122,9 @@ data: [DONE]`,
   });
 
   test('should hide suggested actions after sending message', async ({ page }) => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await page.goto(`/chat/${chatId}`);
 
     // Verify suggested actions are visible initially
     await expect(chatPage.suggestedActions).toBeVisible();
@@ -139,7 +151,9 @@ data: [DONE]`,
   });
 
   test('should disable send button when input is empty', async () => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await chatPage.page.goto(`/chat/${chatId}`);
 
     // Send button should be disabled initially
     await expect(chatPage.sendButton).toBeDisabled();
@@ -158,7 +172,9 @@ data: [DONE]`,
   });
 
   test('should show stop button during generation and send button after completion', async ({ page }) => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await page.goto(`/chat/${chatId}`);
 
     // Mock a slow response to test the stop button
     await page.route('/api/chat', async route => {
@@ -191,7 +207,9 @@ data: [DONE]`,
   });
 
   test('should handle multiple messages in conversation', async ({ page }) => {
-    await chatPage.goto();
+    // Navigate directly to a chat URL since the app redirects from root
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await page.goto(`/chat/${chatId}`);
 
     // Mock responses for multiple messages
     let messageCount = 0;

@@ -31,6 +31,7 @@ import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import type { VisibilityType } from './visibility-selector';
 import type { Attachment, ChatMessage } from '@/lib/types';
 import { startTransition } from 'react';
+import { SuggestedActions } from './suggested-actions';
 
 function PureMultimodalInput({
   chatId,
@@ -240,9 +241,7 @@ function PureMultimodalInput({
       {messages.length === 0 &&
         attachments.length === 0 &&
         uploadQueue.length === 0 && (
-          <div className="text-sm text-muted-foreground">
-            Suggested actions will be displayed here
-          </div>
+          <SuggestedActions onActionClick={(action) => setInput(action)} />
         )}
 
       <input

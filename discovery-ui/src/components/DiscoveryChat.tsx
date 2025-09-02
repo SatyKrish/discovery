@@ -12,6 +12,8 @@ import { useVirtualizer, elementScroll } from "@tanstack/react-virtual";
 import { getFallbackVirtualItems } from "@/lib/virtual";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToolApprovalModal } from "@/components/ToolApprovalModal";
+import { HttpProvider, DiscoveryAgentDataProvider, SendMessageResult } from "@/lib/provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -64,24 +66,7 @@ export type Message = {
 };
 export type Chat = { id: string; title: string; lastActivity?: string };
 
-/***********************************
- * Provider contract
- ***********************************/
-export interface DiscoveryAgentDataProvider {
-  listChats(signal?: AbortSignal): Promise<Chat[]>;
-  listMessages(chatId: string, signal?: AbortSignal): Promise<Message[]>;
-  sendMessage(params: { chatId: string; text: string; attachments?: { id: string; title: string; uri: string; mime?: string; size?: number }[] }, signal?: AbortSignal): Promise<void>;
-  togglePin?(params: { chatId: string; artifactId: string }, signal?: AbortSignal): Promise<void>;
-  createChat?(params: { title?: string }, signal?: AbortSignal): Promise<Chat | null>;
-  deleteChat?(chatId: string, signal?: AbortSignal): Promise<void>;
-  uploadFiles?(files: File[], signal?: AbortSignal): Promise<Array<{ id: string; title: string; uri: string; mime?: string; size?: number }>>;
-}
 
-export const NoopProvider: DiscoveryAgentDataProvider = {
-  async listChats() { return []; },
-  async listMessages() { return []; },
-  async sendMessage() { return; },
-};
 
 /***********************************
  * Sidebar (Chat search + new chat)
@@ -694,7 +679,7 @@ function Composer({ value, onChange, onSend, textareaRef, onPickFiles, picked, o
 /***********************************
  * Root UI (Grid with collapsible left + inline right)
  ***********************************/
-export default function DiscoveryChat({ provider = NoopProvider }: { provider?: DiscoveryAgentDataProvider }) {
+export default function DiscoveryChat({ provider = HttpProvider }: { provider?: DiscoveryAgentDataProvider }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [composer, setComposer] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -710,6 +695,14 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [agentTyping, setAgentTyping] = useState(false);
+
+  // Tool approval modal state
+  const [pendingToolCall, setPendingToolCall] = useState<{
+    id: string;
+    name: string;
+    args: Record<string, any>;
+  } | null>(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   // Virtualization state for the thread
   const threadScrollRef = useRef<HTMLDivElement | null>(null);
@@ -862,7 +855,12 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
     const ac = new AbortController();
     provider
       .sendMessage({ chatId: selectedChatId || "demo", text: newMsg.text, attachments: uploaded }, ac.signal)
-      .then(() => {
+      .then((result: SendMessageResult) => {
+        // Handle tool approval if required
+        if (result.requiresApproval && result.toolCall) {
+          setPendingToolCall(result.toolCall);
+          setShowApprovalModal(true);
+        }
         if (!selectedChatId) return;
         return provider.listMessages(selectedChatId).then((list) => setMessages(list));
       })
@@ -870,6 +868,58 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
       .finally(() => setAgentTyping(false));
   // Ensure we stick to bottom on send
   setAutoScroll(true);
+  };
+
+  // Tool approval handlers
+  const handleToolApprove = async (customArgs?: Record<string, any>) => {
+    if (!pendingToolCall) return;
+
+    try {
+      setAgentTyping(true);
+      const ac = new AbortController();
+      await provider.confirmToolCall?.({
+        chatId: selectedChatId || "demo",
+        toolCallId: pendingToolCall.id,
+        approved: true,
+        customArgs
+      }, ac.signal);
+
+      // Refresh messages to see the tool execution result
+      if (selectedChatId) {
+        const list = await provider.listMessages(selectedChatId);
+        setMessages(list);
+      }
+    } catch (error) {
+      console.error('Error approving tool:', error);
+      alert('Failed to approve tool. Please try again.');
+    } finally {
+      setAgentTyping(false);
+    }
+  };
+
+  const handleToolReject = async () => {
+    if (!pendingToolCall) return;
+
+    try {
+      setAgentTyping(true);
+      const ac = new AbortController();
+      await provider.confirmToolCall?.({
+        chatId: selectedChatId || "demo",
+        toolCallId: pendingToolCall.id,
+        approved: false
+      }, ac.signal);
+
+      // Refresh messages to see the rejection result
+      if (selectedChatId) {
+        const list = await provider.listMessages(selectedChatId);
+        setMessages(list);
+      }
+    } catch (error) {
+      console.error('Error rejecting tool:', error);
+      alert('Failed to reject tool. Please try again.');
+    } finally {
+      setAgentTyping(false);
+    }
   };
 
   const handlePickFiles = (files: FileList | null) => {
@@ -1143,6 +1193,15 @@ export default function DiscoveryChat({ provider = NoopProvider }: { provider?: 
             </div>
           </ScrollArea>
         </div>
+
+        {/* Tool Approval Modal */}
+        <ToolApprovalModal
+          toolCall={pendingToolCall}
+          isOpen={showApprovalModal}
+          onApprove={handleToolApprove}
+          onReject={handleToolReject}
+          onClose={() => setShowApprovalModal(false)}
+        />
       </div>
     </TooltipProvider>
   );

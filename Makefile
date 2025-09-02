@@ -38,6 +38,10 @@ setup-agent:
 setup-frontend:
 	cd $(FRONTEND_DIR) && npm install
 
+# Test frontend with Playwright
+test-frontend:
+	cd $(FRONTEND_DIR) && npx playwright test
+
 # Alias for familiarity
 install: setup
 
@@ -89,6 +93,7 @@ run-dev:
 help:
 	@echo "Available commands:"
 	@echo "  make setup               - Install frontend deps (UI via npm). Python uses existing venv at $(VENV_DIR)"
+	@echo "  make test-frontend       - Run Playwright tests for discovery-ui"
 	@echo "  make run-worker          - Start the Temporal worker (discovery-agent)"
 	@echo "  make run-api             - Start the API server (discovery-agent)"
 	@echo "  make run-frontend        - Start the frontend dev server (discovery-ui)"

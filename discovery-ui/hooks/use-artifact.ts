@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import useSWR from 'swr';
 import type { ArtifactKind, UIArtifact } from '@/components/artifact';
+import { useCallback, useMemo } from 'react';
 
 export const initialArtifactData: UIArtifact = {
   title: '',
@@ -19,15 +20,53 @@ export const initialArtifactData: UIArtifact = {
 };
 
 export function useArtifact() {
-  const [artifact, setArtifact] = useState<UIArtifact>(initialArtifactData);
-  const [metadata, setMetadata] = useState<any>({});
+  const { data: localArtifact, mutate: setLocalArtifact } = useSWR<UIArtifact>(
+    'artifact',
+    null,
+    {
+      fallbackData: initialArtifactData,
+    },
+  );
 
-  return {
-    artifact,
-    setArtifact,
-    metadata,
-    setMetadata,
-  };
+  const artifact = useMemo(() => {
+    if (!localArtifact) return initialArtifactData;
+    return localArtifact;
+  }, [localArtifact]);
+
+  const setArtifact = useCallback(
+    (updaterFn: UIArtifact | ((currentArtifact: UIArtifact) => UIArtifact)) => {
+      setLocalArtifact((currentArtifact) => {
+        const artifactToUpdate = currentArtifact || initialArtifactData;
+
+        if (typeof updaterFn === 'function') {
+          return updaterFn(artifactToUpdate);
+        }
+
+        return updaterFn;
+      });
+    },
+    [setLocalArtifact],
+  );
+
+  const { data: localArtifactMetadata, mutate: setLocalArtifactMetadata } =
+    useSWR<any>(
+      () =>
+        artifact.documentId ? `artifact-metadata-${artifact.documentId}` : null,
+      null,
+      {
+        fallbackData: null,
+      },
+    );
+
+  return useMemo(
+    () => ({
+      artifact,
+      setArtifact,
+      metadata: localArtifactMetadata,
+      setMetadata: setLocalArtifactMetadata,
+    }),
+    [artifact, setArtifact, localArtifactMetadata, setLocalArtifactMetadata],
+  );
 }
 
 export function useArtifactSelector(selector: (state: UIArtifact) => any) {

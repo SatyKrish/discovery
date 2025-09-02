@@ -1,0 +1,36 @@
+import { X, MessageSquare, Copy, Undo, Redo, Clock, Pen, File, Image, Loader, Sparkles, Plus, CheckCircle, Globe, Lock, MoreHorizontal, Share, Trash, ThumbsDown, ThumbsUp, Paperclip, Square, ArrowUp, ArrowDown as ArrowDownIcon, Search, Filter, Menu } from 'lucide-react';
+
+export const CrossIcon = X;
+export const MessageIcon = MessageSquare;
+export const CopyIcon = Copy;
+export const UndoIcon = Undo;
+export const RedoIcon = Redo;
+export const ClockRewind = Clock;
+export const PenIcon = Pen;
+export const FileIcon = File;
+export const ImageIcon = Image;
+export const LoaderIcon = Loader;
+export const SparklesIcon = Sparkles;
+export const PlusIcon = Plus;
+export const VercelIcon = Sparkles; // Placeholder
+export const SidebarLeftIcon = MessageSquare; // Placeholder
+export const CheckCircleFillIcon = CheckCircle;
+export const GlobeIcon = Globe;
+export const LockIcon = Lock;
+export const MoreHorizontalIcon = MoreHorizontal;
+export const ShareIcon = Share;
+export const TrashIcon = Trash;
+export const ThumbDownIcon = ThumbsDown;
+export const ThumbUpIcon = ThumbsUp;
+export const PaperclipIcon = Paperclip;
+export const StopIcon = Square;
+export const ArrowUpIcon = ArrowUp;
+export const CrossSmallIcon = X;
+export const TerminalWindowIcon = MessageSquare;
+export const LogsIcon = MessageSquare;
+export const LineChartIcon = MessageSquare;
+export const ArrowDown = ArrowDownIcon;
+export const SearchIcon = Search;
+export const FilterIcon = Filter;
+export const MenuIcon = Menu;
+export const MessageSquareIcon = MessageSquare;

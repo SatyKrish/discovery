@@ -1,0 +1,63 @@
+'use client';
+
+import type { User } from 'next-auth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+
+import { SidebarHistory } from '@/components/sidebar-history';
+import { SidebarToggle } from '@/components/sidebar-toggle';
+import { SidebarUserNav } from '@/components/sidebar-user-nav';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import Link from 'next/link';
+
+export function AppSidebar({ user }: { user: User | undefined }) {
+  const router = useRouter();
+  const { setOpenMobile, toggleSidebar } = useSidebar();
+
+  // Add keyboard shortcut support (Cmd/Ctrl + B to toggle sidebar)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'b' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        toggleSidebar();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSidebar]);
+
+  return (
+    <Sidebar className="group-data-[side=left]:border-r-0">
+      <SidebarHeader>
+        <SidebarMenu>
+          <div className="flex flex-row justify-between items-center">
+            <Link
+              href="/"
+              onClick={() => {
+                setOpenMobile(false);
+              }}
+              className="flex flex-row gap-3 items-center"
+            >
+              <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer">
+                Chats
+              </span>
+            </Link>
+            <SidebarToggle position="sidebar" />
+          </div>
+        </SidebarMenu>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarHistory user={user} />
+      </SidebarContent>
+      <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>
+    </Sidebar>
+  );
+}

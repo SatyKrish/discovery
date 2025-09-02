@@ -278,6 +278,20 @@ class AgentOrchestratorWorkflow:
             if self.state.should_continue_as_new():
                 workflow.continue_as_new(goal)
 
+        # Return completion result when conversation ends
+        if self.state.done:
+            workflow.logger.info("Conversation ended, completing workflow")
+            return {
+                "status": "completed",
+                "conversation_id": self.state.conversation_id,
+                "total_turns": self.state.turns,
+                "final_plan": [p.model_dump() for p in self.state.plan],
+                "artifacts": [a.model_dump() for a in self.state.artifacts],
+                "conversation_history": [msg.model_dump() for msg in self.state.memory.short_term],
+                "memory_summary": self.state.memory.summary,
+                "last_response_id": self.state.last_response_id,
+            }
+
     # ---------- Helpers ----------
     def _append_assistant(self, msg: Message) -> None:
         self.state.memory.short_term.append(msg)

@@ -51,6 +51,16 @@ export const mockDb = {
     return { chats: mockChats, hasMore: false };
   },
 
+  createChat: async (chatData: Omit<MockChat, 'createdAt'>) => {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const newChat: MockChat = {
+      ...chatData,
+      createdAt: new Date(),
+    };
+    mockChats.unshift(newChat); // Add to beginning of array
+    return newChat;
+  },
+
   deleteChat: async (chatId: string) => {
     await new Promise(resolve => setTimeout(resolve, 200));
     // Remove from mock data

@@ -1,30 +1,7 @@
-import { Chat } from '@/components/chat';
-import { DEFAULT_CHAT_MODEL } from '@/lib/ai/models';
-import { generateUUID } from '@/lib/utils';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  const id = generateUUID();
-
-  // Mock session for now - will be replaced with Discovery Agent auth
-  const mockSession = {
-    user: {
-      id: 'guest',
-      email: 'guest@example.com',
-      name: 'Guest User',
-    },
-    expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  };
-
-  return (
-    <Chat
-      key={id}
-      id={id}
-      initialMessages={[]}
-      initialChatModel={DEFAULT_CHAT_MODEL}
-      initialVisibilityType="private"
-      isReadonly={false}
-      session={mockSession}
-      autoResume={false}
-    />
-  );
+  // Generate new chat ID and redirect to it
+  const newChatId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  redirect(`/chat/${newChatId}`);
 }

@@ -64,7 +64,7 @@ run-frontend:
 CLI_ARGS ?=
 run-cli:
 	@test -f "$(VENV_DIR_ABS)/bin/activate" || (echo "Missing venv at $(VENV_DIR). Please create it." && exit 1)
-	cd $(AGENT_DIR) && . "$(VENV_DIR_ABS)/bin/activate" && python -m src.cli_chat $(CLI_ARGS)
+	cd $(AGENT_DIR) && . "$(VENV_DIR_ABS)/bin/activate" && python -m src.chat $(CLI_ARGS)
 
 #
 # Development environment setup for Temporal (macOS)
@@ -92,6 +92,6 @@ help:
 	@echo "  make run-worker          - Start the Temporal worker (discovery-agent)"
 	@echo "  make run-api             - Start the API server (discovery-agent)"
 	@echo "  make run-frontend        - Start the frontend dev server (discovery-ui)"
-	@echo "  make run-cli             - Run the terminal chat client (discovery-agent/src/cli_chat.py)"
+	@echo "  make run-cli             - Run the terminal chat client (discovery-agent/src/chat.py)"
 	@echo "  make setup-temporal-mac  - Install and start Temporal server on Mac"
 	@echo "  make run-dev             - Start worker, API, and frontend in parallel"

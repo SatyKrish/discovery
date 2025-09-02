@@ -9,22 +9,7 @@ import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 import asyncio
 
-# Add src to path for robust imports
-project_root = os.path.dirname(os.path.dirname(__file__))
-src_path = os.path.join(project_root, 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-try:
-    from src.mcp.core.client import MCPClientManager, ToolOrchestrator
-except ImportError:
-    # Fallback for different environments
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("client", os.path.join(src_path, "mcp", "core", "client.py"))
-    client_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(client_module)
-    MCPClientManager = client_module.MCPClientManager
-    ToolOrchestrator = client_module.ToolOrchestrator
+from src.mcp.core.client import MCPClientManager, ToolOrchestrator
 
 
 @pytest.fixture

@@ -5,12 +5,13 @@ import type { Vote } from '@/lib/db/schema';
 import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 
 interface MessagesProps {
   chatId: string;
   status: UseChatHelpers<ChatMessage>['status'];
   votes: Array<Vote> | undefined;
-  messages: ChatMessage[];
+  messages: Array<ChatMessage>;
   setMessages: UseChatHelpers<ChatMessage>['setMessages'];
   regenerate: UseChatHelpers<ChatMessage>['regenerate'];
   isReadonly: boolean;
@@ -28,7 +29,7 @@ function PureMessages({
   isArtifactVisible,
 }: MessagesProps) {
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto bg-background">
       <div className="flex flex-col min-w-0 gap-6 pt-4 pb-32 px-4 max-w-4xl mx-auto">
         <div className="flex flex-col gap-6">
           {messages.length === 0 && (

@@ -154,7 +154,7 @@ export function Chat({
         </div>
 
         {/* Input Area */}
-        <div className="flex-shrink-0 border-t bg-background">
+        <div className="flex-shrink-0">
           <div className="mx-auto w-full max-w-4xl px-4 py-4 md:px-6 md:py-6">
             {!isReadonly && (
               <MultimodalInput

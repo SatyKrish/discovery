@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useEffect, useState } from 'react';
-import { Moon, Sun, Monitor } from 'lucide-react';
+import { Moon, Sun, Monitor, Menu } from 'lucide-react';
 import { Button } from './ui/button';
 import { useTheme } from './theme-provider';
 import type { VisibilityType } from './visibility-selector';
@@ -13,12 +13,16 @@ function PureChatHeader({
   isReadonly,
   session,
   selectedModelId,
+  onToggleSidebar,
+  sidebarOpen = false,
 }: {
   chatId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
   session: Session;
   selectedModelId: string;
+  onToggleSidebar?: () => void;
+  sidebarOpen?: boolean;
 }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -48,27 +52,50 @@ function PureChatHeader({
   };
 
   return (
-    <header className="flex sticky top-0 bg-background py-1.5 items-center px-2 md:px-2 gap-2">
-      <div className="flex items-center justify-between w-full">
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-bold">AI</span>
+    <header className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border py-3 px-4 md:px-6 z-10">
+      <div className="flex items-center justify-between w-full max-w-none">
+        {/* Left side - Logo and title */}
+        <div className="flex items-center gap-3 min-w-0">
+          {onToggleSidebar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleSidebar}
+              className="h-8 w-8 md:hidden shrink-0"
+              aria-label="Toggle sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+          )}
+          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+            <span className="text-white text-sm font-bold">AI</span>
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Discovery AI</h1>
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-foreground truncate">Discovery AI</h1>
+            <p className="text-xs text-muted-foreground hidden sm:block">AI-powered workflow assistant</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+
+        {/* Right side - Controls */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="px-2 py-1 bg-muted rounded-md text-xs font-medium">
+              {currentModel}
+            </span>
+            <span className="text-xs">
+              ID: {chatId.slice(0, 8)}...
+            </span>
+          </div>
+
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={toggleTheme}
-            className="h-8 w-8 p-0"
+            className="h-8 w-8 shrink-0"
+            aria-label="Toggle theme"
           >
             {getThemeIcon()}
           </Button>
-          <span className="px-2 py-1 bg-muted rounded-md text-xs">
-            {currentModel}
-          </span>
-          <span>Workflow: {chatId.slice(0, 8)}...</span>
         </div>
       </div>
     </header>

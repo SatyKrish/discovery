@@ -5,6 +5,7 @@ import { useChat } from '@ai-sdk/react';
 import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
+import { Sidebar } from '@/components/sidebar';
 import type { Vote } from '@/lib/db/schema';
 import { fetcher, fetchWithErrorHandlers, generateUUID, cn } from '@/lib/utils';
 import { Artifact } from './artifact';
@@ -119,6 +120,10 @@ export function Chat({
   const [attachments, setAttachments] = useState<Array<Attachment>>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
+  // Sidebar state management
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chats, setChats] = useState<Array<{ id: string; title: string; lastActivity?: string }>>([]);
+
   useAutoResume({
     autoResume,
     initialMessages,
@@ -126,48 +131,92 @@ export function Chat({
     setMessages,
   });
 
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
+  const handleNewChat = () => {
+    // Generate a new chat ID and navigate to it
+    const newChatId = generateUUID();
+    window.location.href = `/chat/${newChatId}`;
+  };
+
+  const handleSelectChat = (chatId: string) => {
+    if (chatId !== id) {
+      window.location.href = `/chat/${chatId}`;
+    }
+  };
+
+  const handleDeleteChat = (chatId: string) => {
+    // For now, just remove from local state
+    setChats(prev => prev.filter(chat => chat.id !== chatId));
+  };
+
   return (
-    <>
-      <div className="flex flex-col min-w-0 h-dvh bg-background">
-        <ChatHeader
-          chatId={id}
-          selectedVisibilityType={initialVisibilityType}
-          isReadonly={isReadonly}
-          session={session}
-          selectedModelId={initialChatModel}
-        />
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <Sidebar
+        chats={chats}
+        selectedChatId={id}
+        onSelectChat={handleSelectChat}
+        onNewChat={handleNewChat}
+        onDeleteChat={handleDeleteChat}
+        isOpen={sidebarOpen}
+        onToggle={toggleSidebar}
+        isLoading={false}
+      />
 
-        <Messages
-          chatId={id}
-          status={status}
-          votes={votes}
-          messages={messages}
-          setMessages={setMessages}
-          regenerate={regenerate}
-          isReadonly={isReadonly}
-          isArtifactVisible={isArtifactVisible}
-        />
+      {/* Main Content Area */}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Header - spans full width */}
+        <div className="w-full">
+          <ChatHeader
+            chatId={id}
+            selectedVisibilityType={initialVisibilityType}
+            isReadonly={isReadonly}
+            session={session}
+            selectedModelId={initialChatModel}
+            onToggleSidebar={toggleSidebar}
+            sidebarOpen={sidebarOpen}
+          />
+        </div>
 
-        <div className="sticky bottom-0 flex gap-2 px-4 pb-4 mx-auto w-full bg-background md:pb-6 md:max-w-3xl z-[1] border-t-0">
-          {!isReadonly && (
-            <MultimodalInput
-              chatId={id}
-              input={input}
-              setInput={setInput}
-              status={status}
-              stop={stop}
-              attachments={attachments}
-              setAttachments={setAttachments}
-              messages={messages}
-              setMessages={setMessages}
-              sendMessage={sendMessage}
-              selectedVisibilityType={visibilityType}
-              selectedModelId={initialChatModel}
-            />
-          )}
+        {/* Messages Area */}
+        <div className="flex-1 overflow-hidden">
+          <Messages
+            chatId={id}
+            status={status}
+            votes={votes}
+            messages={messages}
+            setMessages={setMessages}
+            regenerate={regenerate}
+            isReadonly={isReadonly}
+            isArtifactVisible={isArtifactVisible}
+          />
+        </div>
+
+        {/* Input Area */}
+        <div className="flex-shrink-0 border-t bg-background">
+          <div className="mx-auto w-full max-w-4xl px-4 py-4 md:px-6 md:py-6">
+            {!isReadonly && (
+              <MultimodalInput
+                chatId={id}
+                input={input}
+                setInput={setInput}
+                status={status}
+                stop={stop}
+                attachments={attachments}
+                setAttachments={setAttachments}
+                messages={messages}
+                setMessages={setMessages}
+                sendMessage={sendMessage}
+                selectedVisibilityType={visibilityType}
+                selectedModelId={initialChatModel}
+              />
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Artifact Panel */}
       <Artifact
         chatId={id}
         input={input}
@@ -185,6 +234,6 @@ export function Chat({
         selectedVisibilityType={visibilityType}
         selectedModelId={initialChatModel}
       />
-    </>
+    </div>
   );
 }

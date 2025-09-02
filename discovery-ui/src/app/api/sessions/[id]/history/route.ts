@@ -4,8 +4,8 @@ export async function GET(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const base = process.env.DISCOVERY_AGENT_URL;
-  if (!base) return NextResponse.json({ error: "DISCOVERY_AGENT_URL not set" }, { status: 500 });
+  const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
+  if (!base) return NextResponse.json({ error: "BACKEND_BASE_URL not set" }, { status: 500 });
 
   try {
     const dest = `${base}/sessions/${params.id}/history`;

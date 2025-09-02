@@ -19,12 +19,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   // Transform backend response to match frontend expectations
   const response: any = {};
+
+  // Handle assistant message
   if (data.assistant) {
     response.assistant = {
-      content: data.assistant.content || '',
-      role: 'assistant'
+      id: `assistant-${Date.now()}`,
+      role: 'agent',
+      text: data.assistant.content || '',
+      createdAt: data.assistant.ts ? new Date(data.assistant.ts * 1000).toLocaleString() : new Date().toLocaleString()
     };
   }
+
+  // Handle pending tool call
   if (data.pending_tool) {
     response.pending_tool = {
       id: data.pending_tool.id,

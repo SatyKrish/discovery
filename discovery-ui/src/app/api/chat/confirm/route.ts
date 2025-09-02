@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const base = process.env.DISCOVERY_AGENT_URL;
-  if (!base) return NextResponse.json({ error: "DISCOVERY_AGENT_URL not set" }, { status: 500 });
+  const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
+  if (!base) return NextResponse.json({ error: "BACKEND_BASE_URL not set" }, { status: 500 });
 
   try {
     const body = await req.json().catch(() => ({}));

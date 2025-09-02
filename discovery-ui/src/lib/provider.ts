@@ -44,7 +44,7 @@ export type SendMessageResult = {
 export const HttpProvider: DiscoveryAgentDataProvider = {
   async listChats(signal) {
     try {
-      const base = process.env.DISCOVERY_AGENT_URL || 'http://localhost:8080';
+      const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
       const res = await fetch(`${base}/sessions`, { signal, cache: "no-store" });
       if (!res.ok) return [];
       const data: unknown = await res.json().catch(() => [] as unknown);
@@ -64,7 +64,7 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
 
   async listMessages(chatId, signal) {
     try {
-      const base = process.env.DISCOVERY_AGENT_URL || 'http://localhost:8080';
+      const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
       const res = await fetch(`${base}/sessions/${chatId}/history`, { signal, cache: "no-store" });
       if (!res.ok) return [];
       const data: unknown = await res.json().catch(() => [] as unknown);
@@ -73,7 +73,7 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
         id: msg.id || Date.now().toString(),
         role: msg.role === 'user' ? 'user' : 'agent',
         text: msg.content || msg.text || '',
-        createdAt: msg.timestamp || new Date().toISOString()
+        createdAt: msg.ts ? new Date(msg.ts * 1000).toLocaleString() : new Date().toLocaleString()
       }));
     } catch (e: unknown) {
       const name = (e as { name?: string } | null)?.name;
@@ -84,7 +84,7 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
 
   async sendMessage(params, signal) {
     try {
-      const base = process.env.DISCOVERY_AGENT_URL || 'http://localhost:8080';
+      const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
       const response = await fetch(`${base}/chat/send-sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,7 +126,7 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
 
   async confirmToolCall(params, signal) {
     try {
-      const base = process.env.DISCOVERY_AGENT_URL || 'http://localhost:8080';
+      const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
       await fetch(`${base}/chat/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,7 +147,7 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
 
   async createChat(params, signal) {
     try {
-      const base = process.env.DISCOVERY_AGENT_URL || 'http://localhost:8080';
+      const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
       const response = await fetch(`${base}/chat/send-sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -175,7 +175,7 @@ export const HttpProvider: DiscoveryAgentDataProvider = {
 
   async deleteChat(chatId, signal) {
     try {
-      const base = process.env.DISCOVERY_AGENT_URL || 'http://localhost:8080';
+      const base = process.env.BACKEND_BASE_URL || 'http://localhost:8080';
       await fetch(`${base}/chat/end`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

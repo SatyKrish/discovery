@@ -24,3 +24,7 @@ node_modules/
 
 # Env files
 .env.local
+
+# Documentation
+docs/VERCET_AI_CHAT.md
+docs/TEMPORAL_AI_AGENTS.md

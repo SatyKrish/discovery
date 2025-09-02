@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """
-Test MCP result processing fixes
+Test MCP result processing functionality
 """
 
 import sys
 import os
 import json
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pytest
 
-def test_mcp_result_processing():
-    """Test that MCP result processing works correctly"""
-    print("== MCP Result Processing Test ===")
+# Add src to path for robust imports
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+src_path = os.path.join(project_root, 'src')
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+
+def test_mcp_result_processing_basic():
+    """Test basic MCP result processing"""
+    from tests.test_utils import format_tool_result_for_display
 
     # Mock MCP result similar to what the servers return
     mock_mcp_result = {
@@ -22,109 +29,81 @@ def test_mcp_result_processing():
         "success": True
     }
 
-    # Test the result processing logic from the MCP client
-    print("Testing MCP result processing...")
+    # Test the workflow formatting function
+    formatted_result = format_tool_result_for_display("echo.echo", mock_mcp_result)
+    assert "Echo: Hello World" in formatted_result
+    assert "This is a test" in formatted_result
 
-    # Simulate the processing logic from execute_tool method
-    if 'content' in mock_mcp_result and mock_mcp_result['content']:
-        content = []
-        try:
-            for item in mock_mcp_result['content']:
-                # Handle different MCP content types
-                if isinstance(item, dict) and 'type' in item:
-                    item_type = item['type']
-                    if item_type == "text" and 'text' in item:
-                        content.append({"type": "text", "text": item['text']})
-                    elif 'data' in item:
-                        content.append({"type": item_type, "data": item['data']})
-                    else:
-                        # Fallback for unknown content types
-                        content.append({"type": item_type, "content": str(item)})
-                elif isinstance(item, dict):
-                    # Handle dict-like content (fallback)
-                    content.append(item)
-                else:
-                    # Handle other content types
-                    content.append({"type": "unknown", "content": str(item)})
-        except Exception as content_error:
-            print(f"Error processing MCP content: {content_error}")
-            content = [{"type": "error", "text": f"Error processing content: {str(content_error)}"}]
 
-        processed_result = {
-            "tool": mock_mcp_result["tool"],
-            "success": mock_mcp_result["success"],
-            "content": content
-        }
+def test_mcp_result_processing_empty_content():
+    """Test MCP result processing with empty content"""
+    from tests.test_utils import format_tool_result_for_display
 
-        print(f"✅ Processed result: {processed_result}")
+    mock_mcp_result = {
+        "content": [],
+        "tool": "echo.echo",
+        "success": True
+    }
 
-        # Test the workflow formatting function (inline version)
-        formatted_result = format_tool_result_for_display_test("echo.echo", processed_result)
-        print(f"✅ Formatted result: {formatted_result}")
+    formatted_result = format_tool_result_for_display("echo.echo", mock_mcp_result)
+    assert "completed but returned no content" in formatted_result
 
-        return True
 
-    return False
+def test_mcp_result_processing_mixed_content():
+    """Test MCP result processing with mixed content types"""
+    from tests.test_utils import format_tool_result_for_display
 
-def format_tool_result_for_display_test(tool_name: str, result):
-    """Test version of the workflow formatting function"""
-    try:
-        # Handle MCP tool results (already dict format)
-        if isinstance(result, dict):
-            # Check if this is an MCP tool result with content array
-            if "content" in result and isinstance(result["content"], list):
-                return format_mcp_content_result_test(tool_name, result)
-            else:
-                return format_json_result_test(tool_name, result)
+    mock_mcp_result = {
+        "content": [
+            {"type": "text", "text": "Hello World"},
+            {"type": "image", "data": "base64data"},
+            "plain string content"
+        ],
+        "tool": "mixed.tool",
+        "success": True
+    }
 
-        # Handle string results (try to parse as JSON)
-        elif isinstance(result, str):
-            try:
-                parsed = json.loads(result)
-                return format_json_result_test(tool_name, parsed)
-            except json.JSONDecodeError:
-                return result
+    formatted_result = format_tool_result_for_display("mixed.tool", mock_mcp_result)
+    assert "Hello World" in formatted_result
+    assert "plain string content" in formatted_result
 
-        # Handle other types
-        else:
-            return str(result)
-    except Exception as e:
-        # Fallback to string representation
-        return f"Tool result: {str(result)}"
 
-def format_mcp_content_result_test(tool_name: str, data: dict) -> str:
-    """Test version of MCP content formatting"""
-    content_list = data.get("content", [])
+def test_format_tool_result_for_display_json_string():
+    """Test formatting when result is a JSON string"""
+    from tests.test_utils import format_tool_result_for_display
 
-    if not content_list:
-        return f"Tool '{tool_name}' completed but returned no content."
+    json_result = '{"text": "Hello from JSON", "status": "success"}'
+    formatted = format_tool_result_for_display("echo.echo", json_result)
+    assert "Hello from JSON" in formatted
 
-    # Extract text content from MCP result
-    text_parts = []
-    for item in content_list:
-        if isinstance(item, dict) and item.get("type") == "text":
-            text_parts.append(item.get("text", ""))
-        elif isinstance(item, str):
-            text_parts.append(item)
 
-    if text_parts:
-        combined_text = " ".join(text_parts)
-        return f"Tool '{tool_name}' result: {combined_text}"
-    else:
-        # Fallback for non-text content
-        return f"Tool '{tool_name}' completed with {len(content_list)} content items."
+def test_format_tool_result_for_display_plain_string():
+    """Test formatting when result is a plain string"""
+    from tests.test_utils import format_tool_result_for_display
 
-def format_json_result_test(tool_name: str, data: dict) -> str:
-    """Test version of JSON result formatting"""
-    if tool_name == "echo.echo":
-        text = data.get("text", "")
-        return f"Echo: {text}"
-    else:
-        return json.dumps(data, indent=2)
+    plain_result = "Plain text result"
+    formatted = format_tool_result_for_display("test.tool", plain_result)
+    assert formatted == "Plain text result"
 
-def test_error_handling():
-    """Test error handling in MCP result processing"""
-    print("\nTesting error handling...")
+
+def test_format_tool_result_for_display_other_types():
+    """Test formatting when result is other types"""
+    from tests.test_utils import format_tool_result_for_display
+
+    # Test with integer
+    int_result = 42
+    formatted = format_tool_result_for_display("test.tool", int_result)
+    assert formatted == "42"
+
+    # Test with list
+    list_result = [1, 2, 3]
+    formatted = format_tool_result_for_display("test.tool", list_result)
+    assert "1" in formatted and "2" in formatted
+
+
+def test_error_handling_malformed_content():
+    """Test error handling with malformed content"""
+    from tests.test_utils import format_tool_result_for_display
 
     # Test with malformed content
     malformed_result = {
@@ -137,22 +116,56 @@ def test_error_handling():
         "success": True
     }
 
-    try:
-        formatted = format_tool_result_for_display_test("test.tool", malformed_result)
-        print(f"✅ Error handling works: {formatted}")
-        return True
-    except Exception as e:
-        print(f"❌ Error handling failed: {e}")
-        return False
+    # Should not raise exception, should handle gracefully
+    formatted = format_tool_result_for_display("test.tool", malformed_result)
+    assert isinstance(formatted, str)
+    assert len(formatted) > 0
 
-if __name__ == "__main__":
-    print("Testing MCP result processing fixes...")
 
-    success1 = test_mcp_result_processing()
-    success2 = test_error_handling()
+def test_format_mcp_content_result_various_types():
+    """Test MCP content formatting with various content types"""
+    from tests.test_utils import format_tool_result_for_display
 
-    if success1 and success2:
-        print("\n🎉 All MCP result processing tests passed!")
-    else:
-        print("\n❌ Some tests failed")
-        sys.exit(1)
+    # Test with only text content
+    text_only = {
+        "content": [
+            {"type": "text", "text": "First message"},
+            {"type": "text", "text": "Second message"}
+        ],
+        "tool": "echo.echo",
+        "success": True
+    }
+
+    formatted = format_tool_result_for_display("echo.echo", text_only)
+    assert "First message" in formatted
+    assert "Second message" in formatted
+
+    # Test with no text content
+    no_text = {
+        "content": [
+            {"type": "image", "data": "image_data"},
+            {"type": "file", "path": "/tmp/file.txt"}
+        ],
+        "tool": "file.tool",
+        "success": True
+    }
+
+    formatted = format_tool_result_for_display("file.tool", no_text)
+    assert "completed with 2 content items" in formatted
+
+
+def test_format_json_result_different_tools():
+    """Test JSON result formatting for different tools"""
+    from tests.test_utils import format_tool_result_for_display
+
+    # Test echo tool
+    echo_data = {"text": "Hello World"}
+    formatted = format_tool_result_for_display("echo.echo", echo_data)
+    assert formatted == "Echo: Hello World"
+
+    # Test other tool (should return JSON)
+    other_data = {"result": "some data", "status": "ok"}
+    formatted = format_tool_result_for_display("other.tool", other_data)
+    # Should contain the JSON data
+    assert "result" in formatted
+    assert "some data" in formatted

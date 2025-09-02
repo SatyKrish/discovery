@@ -81,7 +81,7 @@ discovery-agent/
 │   │   └── summarize.py             # Conversation summarization
 │   ├── api/
 │   │   └── server.py                # FastAPI server
-│   ├── cli_chat.py                  # CLI testing interface
+│   ├── chat.py                      # CLI Chat interface
 │   ├── llm.py                       # OpenAI Responses API client
 │   ├── models.py                    # Pydantic data models
 │   ├── config.py                    # Configuration management

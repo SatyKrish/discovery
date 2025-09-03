@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 from temporalio import activity
 from src.config import settings, apply_openai_env_from_settings
 from src.llm import LLMError, _provider
-from src.models import PlanItem, ToolCall, StructuredToolResult
+from src.models import PlanItem, ToolCall, StructuredToolResult, FileRef
 from src.tools.registry import TOOLS, TOOL_SCHEMAS
 
 # Ensure env for activity process

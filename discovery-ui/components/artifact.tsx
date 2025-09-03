@@ -306,6 +306,8 @@ function PureArtifact({
                     setMessages={setMessages}
                     selectedVisibilityType={selectedVisibilityType}
                     selectedModelId={selectedModelId}
+                    isAtBottom={true}
+                    onScrollToBottom={() => {}}
                   />
                 </div>
               </div>

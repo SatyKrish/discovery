@@ -27,7 +27,7 @@ import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown } from 'lucide-react';
-import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
+
 import type { VisibilityType } from './visibility-selector';
 import type { Attachment, ChatMessage } from '@/lib/types';
 import { startTransition } from 'react';
@@ -47,6 +47,8 @@ function PureMultimodalInput({
   className,
   selectedVisibilityType,
   selectedModelId,
+  isAtBottom,
+  onScrollToBottom,
 }: {
   chatId: string;
   input: string;
@@ -61,6 +63,8 @@ function PureMultimodalInput({
   className?: string;
   selectedVisibilityType: VisibilityType;
   selectedModelId: string;
+  isAtBottom: boolean;
+  onScrollToBottom: () => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -112,32 +116,51 @@ function PureMultimodalInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
 
-  const submitForm = useCallback(() => {
+  const submitForm = useCallback(async () => {
+    console.log('🚀 submitForm called with input:', input);
+    console.log('🚀 sendMessage function exists:', typeof sendMessage);
+
+    if (!input.trim() && attachments.length === 0) {
+      console.log('⚠️ No input or attachments, skipping send');
+      return;
+    }
+
     window.history.replaceState({}, '', `/chat/${chatId}`);
 
-    sendMessage({
-      role: 'user',
-      parts: [
-        ...attachments.map((attachment) => ({
-          type: 'file' as const,
-          url: attachment.url,
-          name: attachment.name,
-          mediaType: attachment.contentType,
-        })),
-        {
-          type: 'text',
-          text: input,
-        },
-      ],
-    });
+    const messageParts = [
+      ...attachments.map((attachment) => ({
+        type: 'file' as const,
+        url: attachment.url,
+        name: attachment.name,
+        mediaType: attachment.contentType,
+      })),
+      ...(input.trim() ? [{
+        type: 'text' as const,
+        text: input,
+      }] : []),
+    ];
 
-    setAttachments([]);
-    setLocalStorageInput('');
-    resetHeight();
-    setInput('');
+    console.log('🚀 Sending message with parts:', messageParts);
 
-    if (width && width > 768) {
-      textareaRef.current?.focus();
+    try {
+      await sendMessage({
+        role: 'user',
+        parts: messageParts,
+      });
+      console.log('✅ sendMessage called successfully');
+
+      // Clear form after successful send
+      setAttachments([]);
+      setLocalStorageInput('');
+      resetHeight();
+      setInput('');
+
+      if (width && width > 768) {
+        textareaRef.current?.focus();
+      }
+    } catch (error) {
+      console.error('❌ Error calling sendMessage:', error);
+      toast.error('Failed to send message. Please try again.');
     }
   }, [
     input,
@@ -203,13 +226,7 @@ function PureMultimodalInput({
     [setAttachments],
   );
 
-  const { isAtBottom, scrollToBottom } = useScrollToBottom();
 
-  useEffect(() => {
-    if (status === 'submitted') {
-      scrollToBottom();
-    }
-  }, [status, scrollToBottom]);
 
   return (
     <div className="flex relative flex-col gap-4 w-full">
@@ -229,7 +246,7 @@ function PureMultimodalInput({
               variant="outline"
               onClick={(event) => {
                 event.preventDefault();
-                scrollToBottom();
+                onScrollToBottom();
               }}
             >
               <ArrowDown />
@@ -253,13 +270,18 @@ function PureMultimodalInput({
         tabIndex={-1}
       />
 
-      <PromptInput
-        className="bg-muted/50 rounded-3xl border shadow-none transition-all duration-200 hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/50"
+      <form
+        className="bg-muted/50 rounded-3xl border shadow-none transition-all duration-200 hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/50 flex flex-col"
         onSubmit={(event) => {
+          console.log('📝 Form onSubmit called');
+          console.log('📝 Event type:', event.type);
+          console.log('📝 Status:', status);
           event.preventDefault();
           if (status !== 'ready') {
+            console.log('⚠️ Status is not ready, showing error');
             toast.error('Please wait for the model to finish its response!');
           } else {
+            console.log('✅ Calling submitForm');
             submitForm();
           }
         }}
@@ -301,6 +323,7 @@ function PureMultimodalInput({
             <StopButton stop={stop} setMessages={setMessages} />
           ) : (
             <PromptInputSubmit
+              data-testid="send-button"
               disabled={!input.trim() || uploadQueue.length > 0}
               className="p-3 text-primary-foreground bg-primary rounded-full hover:bg-primary/90"
             >
@@ -308,7 +331,7 @@ function PureMultimodalInput({
             </PromptInputSubmit>
           )}
         </PromptInputToolbar>
-      </PromptInput>
+      </form>
     </div>
   );
 }
@@ -321,6 +344,7 @@ export const MultimodalInput = memo(
     if (!equal(prevProps.attachments, nextProps.attachments)) return false;
     if (prevProps.selectedVisibilityType !== nextProps.selectedVisibilityType)
       return false;
+    if (prevProps.isAtBottom !== nextProps.isAtBottom) return false;
 
     return true;
   },

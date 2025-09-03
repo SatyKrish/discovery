@@ -91,6 +91,11 @@
         --sidebar-accent-foreground: 240 4.8% 95.9%;
         --sidebar-border: 240 3.7% 15.9%;
         --sidebar-ring: 217.2 91.2% 59.8%;
+        /* Enhanced contrast for message text */
+        --message-user-bg: 0 0% 98%;
+        --message-user-text: 240 5.9% 10%;
+        --message-assistant-bg: 240 10% 3.9%;
+        --message-assistant-text: 0 0% 98%;
     }
 }
 
@@ -161,4 +166,13 @@
 
 .suggestion-highlight {
     @apply bg-blue-200 hover:bg-blue-300 dark:hover:bg-blue-400/50 dark:text-blue-50 dark:bg-blue-500/40;
+}
+
+/* Additional dark mode text visibility fixes */
+.dark .text-foreground {
+    color: hsl(var(--foreground)) !important;
+}
+
+.dark .text-muted-foreground {
+    color: hsl(var(--muted-foreground)) !important;
 }

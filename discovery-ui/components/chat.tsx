@@ -2,11 +2,10 @@
 
 import { DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
-import { useEffect, useState } from 'react';
-import useSWR, { useSWRConfig } from 'swr';
+import { useEffect, useRef, useState } from 'react';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
-import { fetcher, fetchWithErrorHandlers, generateUUID, cn } from '@/lib/utils';
+import { fetchWithErrorHandlers, generateUUID } from '@/lib/utils';
 import { Artifact } from './artifact';
 import { MultimodalInput } from './multimodal-input';
 import { Messages } from './messages';
@@ -15,8 +14,8 @@ import { useArtifactSelector } from '@/hooks/use-artifact';
 import { toast } from './toast';
 import type { Session } from 'next-auth';
 import { useSearchParams } from 'next/navigation';
-import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
+import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import { ChatSDKError } from '@/lib/errors';
 import type { Attachment, ChatMessage } from '@/lib/types';
 import { useDataStream } from './data-stream-provider';
@@ -38,10 +37,9 @@ export function Chat({
   session: Session;
   autoResume: boolean;
 }) {
-  // Mock visibility type since database is removed
+  // Keep visibility simple since DB is removed
   const visibilityType = initialVisibilityType;
 
-  const { mutate } = useSWRConfig();
   const { setDataStream } = useDataStream();
 
   const [input, setInput] = useState<string>('');
@@ -61,11 +59,28 @@ export function Chat({
     generateId: generateUUID,
     transport: new DefaultChatTransport({
       api: '/api/chat',
+      fetch: async (input, init) => {
+        try {
+          const response = await fetch(input as RequestInfo, init as RequestInit);
+          return response;
+        } catch (error) {
+          throw error;
+        }
+      },
       prepareSendMessagesRequest({ messages, id, body }) {
+
+        // Convert AI SDK message format to backend expected format
+        const formattedMessages = messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          parts: msg.parts || [{ type: 'text', text: (msg as any).content || '' }],
+          createdAt: (msg as any).createdAt || new Date().toISOString(),
+        }));
+
         return {
           body: {
             id,
-            message: messages.at(-1),
+            messages: formattedMessages,
             selectedChatModel: initialChatModel,
             selectedVisibilityType: visibilityType,
             ...body,
@@ -73,11 +88,12 @@ export function Chat({
         };
       },
     }),
-    // onData: (dataPart) => {
-    //   setDataStream((ds) => (ds ? [...ds, dataPart] : []));
-    // },
+    onData: (dataPart) => {
+      // pipe data UI parts to the artifact side panel
+      setDataStream((ds) => (ds ? [...ds, dataPart] : [dataPart]));
+    },
     onFinish: () => {
-      // Removed sidebar history mutation
+      // sidebar history mutation intentionally removed in this mock build
     },
     onError: (error) => {
       if (error instanceof ChatSDKError) {
@@ -100,13 +116,21 @@ export function Chat({
         role: 'user',
         parts: [{ type: 'text', text: query }],
       });
-
       setHasAppendedQuery(true);
       window.history.replaceState({}, '', `/chat/${id}`);
     }
-  }, [query, sendMessage, hasAppendedQuery, id]);
+  }, [query, hasAppendedQuery, id, sendMessage]);
 
-  // Mock votes data since database is removed
+  // Clear any cached data for new chats
+  useEffect(() => {
+    if (messages.length === 0 && !hasAppendedQuery) {
+      // Clear any existing chat data for this session
+      localStorage.removeItem(`chat-${id}`);
+      sessionStorage.removeItem(`chat-${id}`);
+    }
+  }, [id, messages.length, hasAppendedQuery]);
+
+  // Mock votes since DB is removed
   const votes: Array<Vote> | undefined = undefined;
 
   const [attachments, setAttachments] = useState<Array<Attachment>>([]);
@@ -119,11 +143,21 @@ export function Chat({
     setMessages,
   });
 
+  // Use the scroll-to-bottom hook
+  const { scrollRef, isAtBottom, scrollToBottom } = useScrollToBottom();
+
+  // Auto-scroll when messages update or streaming status changes
+  useEffect(() => {
+    if (isAtBottom) {
+      scrollToBottom();
+    }
+  }, [messages, status, isAtBottom, scrollToBottom]);
+
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh bg-background">
       {/* Main Content Area */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Header - spans full width */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        {/* Header */}
         <div className="w-full">
           <ChatHeader
             chatId={id}
@@ -134,8 +168,11 @@ export function Chat({
           />
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-hidden">
+        {/* Messages */}
+        <div
+          ref={scrollRef}
+          className="flex-1 min-h-0 overflow-y-auto scroll-smooth overscroll-contain"
+        >
           <Messages
             chatId={id}
             status={status}
@@ -148,7 +185,7 @@ export function Chat({
           />
         </div>
 
-        {/* Input Area */}
+        {/* Input */}
         <div className="flex-shrink-0">
           <div className="mx-auto w-full max-w-4xl px-4 py-4 md:px-6 md:py-6">
             {!isReadonly && (
@@ -165,6 +202,8 @@ export function Chat({
                 sendMessage={sendMessage}
                 selectedVisibilityType={visibilityType}
                 selectedModelId={initialChatModel}
+                isAtBottom={isAtBottom}
+                onScrollToBottom={scrollToBottom}
               />
             )}
           </div>

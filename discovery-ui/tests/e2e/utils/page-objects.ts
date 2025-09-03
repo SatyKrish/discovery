@@ -14,15 +14,15 @@ export class ChatPage {
   }
 
   get sendButton(): Locator {
-    return this.page.locator('button[type="submit"]').first();
+    return this.page.getByTestId('send-button');
   }
 
   get stopButton(): Locator {
-    return this.page.locator('button').filter({ hasText: /stop/i }).first();
+    return this.page.getByTestId('stop-button');
   }
 
   get suggestedActions(): Locator {
-    return this.page.locator('.grid.grid-cols-2.gap-4').first();
+    return this.page.locator('.grid.grid-cols-2.gap-4.p-4').first();
   }
 
   get attachmentsPreview(): Locator {
@@ -234,11 +234,11 @@ export class MultimodalInputPage {
   }
 
   get sendButton(): Locator {
-    return this.page.locator('button[type="submit"]').first();
+    return this.page.getByTestId('send-button');
   }
 
   get stopButton(): Locator {
-    return this.page.locator('button').filter({ hasText: /stop/i }).first();
+    return this.page.getByTestId('stop-button');
   }
 
   // Actions

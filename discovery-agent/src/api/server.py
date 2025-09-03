@@ -1,19 +1,52 @@
 from __future__ import annotations
 
 import time
+from datetime import timedelta
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from temporalio.client import Client, WithStartWorkflowOperation
+from temporalio.common import WorkflowIDConflictPolicy
 from temporalio.contrib.openai_agents import OpenAIAgentsPlugin
 from temporalio.contrib.pydantic import pydantic_data_converter
+import asyncio
+import json
 
 from src.config import settings, apply_openai_env_from_settings
 from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow, TurnResult
 from src.models import Message  # your existing pydantic model
+
+
+# Helper function to extract text from both content and parts formats
+def _extract_text(msg: dict) -> str:
+    """
+    Extract text from message that may be in different formats:
+    - Legacy format: { content: "text" }
+    - Vercel AI format: { parts: [{ type: "text", text: "text" }] }
+    """
+    # Prefer 'content' if present (legacy format)
+    content = msg.get("content")
+    if isinstance(content, str) and content.strip():
+        return content
+
+    # Support Vercel AI 'parts' for multimodal messages
+    parts = msg.get("parts")
+    if isinstance(parts, list):
+        chunks = []
+        for p in parts:
+            # text parts: { type: 'text', text: '...' }
+            if isinstance(p, dict) and p.get("type") == "text":
+                t = p.get("text")
+                if isinstance(t, str):
+                    chunks.append(t)
+        if chunks:
+            return " ".join(chunks)
+
+    return ""
 
 
 @asynccontextmanager
@@ -87,6 +120,10 @@ class ConfirmRequest(BaseModel):
 
 class EndRequest(BaseModel):
     workflow_id: str
+
+class ChatStreamRequest(BaseModel):
+    id: Optional[str] = None
+    messages: List[Dict[str, Any]] = []
 
 
 # ---------- Endpoints ----------
@@ -178,6 +215,117 @@ async def history(workflow_id: str) -> List[Dict[str, Any]]:
     for m in msgs:
         out.append(m.model_dump() if hasattr(m, "model_dump") else dict(m))
     return out
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: Request):
+    """
+    Accepts AI SDK payload: { id?: string, messages: [...] }
+    - Uses Update-with-Start to run user_turn
+    - If tool approval needed, streams a notice
+    - Otherwise streams assistant content in chunks
+    """
+    body = await req.json()
+    req_obj = ChatStreamRequest.model_validate(body)
+    client = await _client()
+
+    # Stable session/workflow id
+    wid = req_obj.id or f"session-{int(time.time() * 1000)}"
+
+    # Extract the last user message for this turn
+    last_user = None
+    for m in reversed(req_obj.messages):
+        if m.get("role") == "user":
+            last_user = m
+            break
+    if not last_user:
+        raise HTTPException(status_code=400, detail="No user message found in 'messages'.")
+
+    # Extract text from the user message (supports both content and parts formats)
+    user_text = _extract_text(last_user)
+    if not user_text:
+        raise HTTPException(status_code=400, detail="Empty user message")
+
+    # Goal = first message content when present (or default)
+    goal = (_extract_text(req_obj.messages[0]) if req_obj.messages else None) or "Have a helpful conversation"
+
+    # Prepare signal-with-start semantics
+    start_op = WithStartWorkflowOperation(
+        AgentOrchestratorWorkflow.run,
+        goal,
+        id=wid,
+        id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
+        task_queue=settings.task_queue,
+        memo={"started_at": int(time.time()), "Goal": goal},
+        execution_timeout=timedelta(days=7),
+    )
+
+    # Drive the turn
+    try:
+        result: TurnResult = await client.execute_update_with_start_workflow(
+            AgentOrchestratorWorkflow.user_turn,
+            Message(role="user", content=user_text, ts=time.time()),
+            start_workflow_operation=start_op,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"user_turn failed: {e}")
+
+    async def ds():
+        # Optional: signal step start
+        yield 'data: {"type":"start-step"}\n\n'
+
+        if result.pending_tool is not None:
+            evt = {
+                "type": "tool",
+                "status": "pending",
+                "tool_call_id": result.pending_tool.id,
+                "name": result.pending_tool.name,
+                "args": result.pending_tool.args,
+                "requires_approval": result.pending_tool.requires_approval,
+                "workflow_id": wid,
+            }
+            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+            yield 'data: {"type":"finish"}\n\n'
+            yield 'data: [DONE]\n\n'
+            return
+
+        # Get assistant text now or wait for it
+        if result.assistant and result.assistant.content:
+            text = result.assistant.content
+        else:
+            try:
+                handle = client.get_workflow_handle(wid)
+                waited = await handle.execute_update(AgentOrchestratorWorkflow.wait_for_assistant)
+                text = waited.content or ""
+            except Exception as e:
+                text = f"[error waiting for assistant] {e}"
+
+        # Stream as text events (following AI SDK format)
+        if text:
+            # Send text-start event
+            yield f'data: {json.dumps({"type":"text-start","id":wid}, ensure_ascii=False)}\n\n'
+
+            # Stream text-delta events
+            for token in text.split(" "):
+                delta = token + " "
+                yield f'data: {json.dumps({"type":"text-delta","id":wid,"delta": delta}, ensure_ascii=False)}\n\n'
+                await asyncio.sleep(0.02)
+
+            # Send text-end event
+            yield f'data: {json.dumps({"type":"text-end","id":wid}, ensure_ascii=False)}\n\n'
+
+        # Always send finish and [DONE] to properly terminate the stream
+        yield 'data: {"type":"finish"}\n\n'
+        yield 'data: [DONE]\n\n'
+
+    return StreamingResponse(
+        ds(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/healthz")

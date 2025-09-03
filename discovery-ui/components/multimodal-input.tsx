@@ -112,32 +112,51 @@ function PureMultimodalInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
 
-  const submitForm = useCallback(() => {
+  const submitForm = useCallback(async () => {
+    console.log('🚀 submitForm called with input:', input);
+    console.log('🚀 sendMessage function exists:', typeof sendMessage);
+
+    if (!input.trim() && attachments.length === 0) {
+      console.log('⚠️ No input or attachments, skipping send');
+      return;
+    }
+
     window.history.replaceState({}, '', `/chat/${chatId}`);
 
-    sendMessage({
-      role: 'user',
-      parts: [
-        ...attachments.map((attachment) => ({
-          type: 'file' as const,
-          url: attachment.url,
-          name: attachment.name,
-          mediaType: attachment.contentType,
-        })),
-        {
-          type: 'text',
-          text: input,
-        },
-      ],
-    });
+    const messageParts = [
+      ...attachments.map((attachment) => ({
+        type: 'file' as const,
+        url: attachment.url,
+        name: attachment.name,
+        mediaType: attachment.contentType,
+      })),
+      ...(input.trim() ? [{
+        type: 'text' as const,
+        text: input,
+      }] : []),
+    ];
 
-    setAttachments([]);
-    setLocalStorageInput('');
-    resetHeight();
-    setInput('');
+    console.log('🚀 Sending message with parts:', messageParts);
 
-    if (width && width > 768) {
-      textareaRef.current?.focus();
+    try {
+      await sendMessage({
+        role: 'user',
+        parts: messageParts,
+      });
+      console.log('✅ sendMessage called successfully');
+
+      // Clear form after successful send
+      setAttachments([]);
+      setLocalStorageInput('');
+      resetHeight();
+      setInput('');
+
+      if (width && width > 768) {
+        textareaRef.current?.focus();
+      }
+    } catch (error) {
+      console.error('❌ Error calling sendMessage:', error);
+      toast.error('Failed to send message. Please try again.');
     }
   }, [
     input,
@@ -253,13 +272,18 @@ function PureMultimodalInput({
         tabIndex={-1}
       />
 
-      <PromptInput
-        className="bg-muted/50 rounded-3xl border shadow-none transition-all duration-200 hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/50"
+      <form
+        className="bg-muted/50 rounded-3xl border shadow-none transition-all duration-200 hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/50 flex flex-col"
         onSubmit={(event) => {
+          console.log('📝 Form onSubmit called');
+          console.log('📝 Event type:', event.type);
+          console.log('📝 Status:', status);
           event.preventDefault();
           if (status !== 'ready') {
+            console.log('⚠️ Status is not ready, showing error');
             toast.error('Please wait for the model to finish its response!');
           } else {
+            console.log('✅ Calling submitForm');
             submitForm();
           }
         }}
@@ -308,7 +332,7 @@ function PureMultimodalInput({
             </PromptInputSubmit>
           )}
         </PromptInputToolbar>
-      </PromptInput>
+      </form>
     </div>
   );
 }

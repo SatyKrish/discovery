@@ -36,13 +36,13 @@ async def main():
     except Exception:
         pass
 
+    # Project OpenAI/Azure params into env BEFORE creating clients
+    apply_openai_env_from_settings()
+
     setup_tracing(settings.otel_service_name_worker, settings.otel_endpoint)
 
     # Configure Agents plugin (keeps model calls as Activities)
     agents_plugin = OpenAIAgentsPlugin(model_params=ModelActivityParameters())
-
-    # Project OpenAI/Azure params into env for Activities
-    apply_openai_env_from_settings()
 
     client = await Client.connect(
         settings.temporal_target,

@@ -15,6 +15,7 @@ import { toast } from './toast';
 import type { Session } from 'next-auth';
 import { useSearchParams } from 'next/navigation';
 import { useAutoResume } from '@/hooks/use-auto-resume';
+import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import { ChatSDKError } from '@/lib/errors';
 import type { Attachment, ChatMessage } from '@/lib/types';
 import { useDataStream } from './data-stream-provider';
@@ -142,31 +143,15 @@ export function Chat({
     setMessages,
   });
 
-  // --- auto-scroll refs and state
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const endRef = useRef<HTMLDivElement | null>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-
-  // Track if user is at bottom of chat
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-
-    const onScroll = () => {
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
-      setIsAtBottom(atBottom);
-    };
-
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
+  // Use the scroll-to-bottom hook
+  const { scrollRef, isAtBottom, scrollToBottom } = useScrollToBottom();
 
   // Auto-scroll when messages update or streaming status changes
   useEffect(() => {
     if (isAtBottom) {
-      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      scrollToBottom();
     }
-  }, [messages, status, isAtBottom]);
+  }, [messages, status, isAtBottom, scrollToBottom]);
 
   return (
     <div className="flex h-dvh bg-background">
@@ -185,7 +170,7 @@ export function Chat({
 
         {/* Messages */}
         <div
-          ref={listRef}
+          ref={scrollRef}
           className="flex-1 min-h-0 overflow-y-auto scroll-smooth overscroll-contain"
         >
           <Messages
@@ -198,8 +183,6 @@ export function Chat({
             isReadonly={isReadonly}
             isArtifactVisible={isArtifactVisible}
           />
-          {/* anchor at the very bottom to scrollIntoView */}
-          <div ref={endRef} />
         </div>
 
         {/* Input */}
@@ -219,6 +202,8 @@ export function Chat({
                 sendMessage={sendMessage}
                 selectedVisibilityType={visibilityType}
                 selectedModelId={initialChatModel}
+                isAtBottom={isAtBottom}
+                onScrollToBottom={scrollToBottom}
               />
             )}
           </div>

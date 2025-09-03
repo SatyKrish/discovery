@@ -27,7 +27,7 @@ import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown } from 'lucide-react';
-import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
+
 import type { VisibilityType } from './visibility-selector';
 import type { Attachment, ChatMessage } from '@/lib/types';
 import { startTransition } from 'react';
@@ -47,6 +47,8 @@ function PureMultimodalInput({
   className,
   selectedVisibilityType,
   selectedModelId,
+  isAtBottom,
+  onScrollToBottom,
 }: {
   chatId: string;
   input: string;
@@ -61,6 +63,8 @@ function PureMultimodalInput({
   className?: string;
   selectedVisibilityType: VisibilityType;
   selectedModelId: string;
+  isAtBottom: boolean;
+  onScrollToBottom: () => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -222,13 +226,7 @@ function PureMultimodalInput({
     [setAttachments],
   );
 
-  const { isAtBottom, scrollToBottom } = useScrollToBottom();
 
-  useEffect(() => {
-    if (status === 'submitted') {
-      scrollToBottom();
-    }
-  }, [status, scrollToBottom]);
 
   return (
     <div className="flex relative flex-col gap-4 w-full">
@@ -248,7 +246,7 @@ function PureMultimodalInput({
               variant="outline"
               onClick={(event) => {
                 event.preventDefault();
-                scrollToBottom();
+                onScrollToBottom();
               }}
             >
               <ArrowDown />
@@ -346,6 +344,7 @@ export const MultimodalInput = memo(
     if (!equal(prevProps.attachments, nextProps.attachments)) return false;
     if (prevProps.selectedVisibilityType !== nextProps.selectedVisibilityType)
       return false;
+    if (prevProps.isAtBottom !== nextProps.isAtBottom) return false;
 
     return true;
   },

@@ -2,7 +2,7 @@
 
 import { DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
 import { fetchWithErrorHandlers, generateUUID } from '@/lib/utils';
@@ -142,10 +142,36 @@ export function Chat({
     setMessages,
   });
 
+  // --- auto-scroll refs and state
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  // Track if user is at bottom of chat
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+      setIsAtBottom(atBottom);
+    };
+
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Auto-scroll when messages update or streaming status changes
+  useEffect(() => {
+    if (isAtBottom) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages, status, isAtBottom]);
+
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh bg-background">
       {/* Main Content Area */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
         {/* Header */}
         <div className="w-full">
           <ChatHeader
@@ -158,7 +184,10 @@ export function Chat({
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-hidden">
+        <div
+          ref={listRef}
+          className="flex-1 min-h-0 overflow-y-auto scroll-smooth overscroll-contain"
+        >
           <Messages
             chatId={id}
             status={status}
@@ -169,6 +198,8 @@ export function Chat({
             isReadonly={isReadonly}
             isArtifactVisible={isArtifactVisible}
           />
+          {/* anchor at the very bottom to scrollIntoView */}
+          <div ref={endRef} />
         </div>
 
         {/* Input */}

@@ -14,7 +14,7 @@ from src.models import PlanItem
 @pytest.mark.asyncio
 async def test_plan_activity_basic():
     """Test basic plan activity functionality"""
-    from src.activities.plan import plan_activity
+    from src.activities import plan_activity
 
     mock_context = {"goal": "Create a simple web application"}
 
@@ -40,9 +40,9 @@ async def test_plan_activity_basic():
     mock_activity_info.run_id = "test-run-456"
     mock_activity_info.attempt = 1
 
-    with patch('src.activities.plan.llm_json', return_value=mock_response) as mock_llm, \
+    with patch('src.activities.llm_json', return_value=mock_response) as mock_llm, \
          patch('temporalio.activity.info', return_value=mock_activity_info), \
-         patch('src.activities.plan.get_tracer') as mock_tracer:
+         patch('src.activities.get_tracer') as mock_tracer:
 
         mock_span = MagicMock()
         mock_tracer.return_value.start_as_current_span.return_value.__enter__ = mock_span
@@ -66,7 +66,7 @@ async def test_plan_activity_basic():
 @pytest.mark.asyncio
 async def test_plan_activity_hierarchical():
     """Test plan activity with hierarchical planning response"""
-    from src.activities.plan import plan_activity
+    from src.activities import plan_activity
 
     mock_context = {"goal": "Build a complex application"}
 
@@ -104,9 +104,9 @@ async def test_plan_activity_hierarchical():
     mock_activity_info.run_id = "test-run-456"
     mock_activity_info.attempt = 1
 
-    with patch('src.activities.plan.llm_json', return_value=mock_response) as mock_llm, \
+    with patch('src.activities.llm_json', return_value=mock_response) as mock_llm, \
          patch('temporalio.activity.info', return_value=mock_activity_info), \
-         patch('src.activities.plan.get_tracer') as mock_tracer:
+         patch('src.activities.get_tracer') as mock_tracer:
 
         mock_span = MagicMock()
         mock_tracer.return_value.start_as_current_span.return_value.__enter__ = mock_span
@@ -126,7 +126,7 @@ async def test_plan_activity_hierarchical():
 @pytest.mark.asyncio
 async def test_plan_activity_fallback():
     """Test plan activity fallback to original format"""
-    from src.activities.plan import plan_activity
+    from src.activities import plan_activity
 
     mock_context = {"goal": "Simple task"}
 
@@ -144,9 +144,9 @@ async def test_plan_activity_fallback():
     mock_activity_info.run_id = "test-run-456"
     mock_activity_info.attempt = 1
 
-    with patch('src.activities.plan.llm_json', return_value=mock_response) as mock_llm, \
+    with patch('src.activities.llm_json', return_value=mock_response) as mock_llm, \
          patch('temporalio.activity.info', return_value=mock_activity_info), \
-         patch('src.activities.plan.get_tracer') as mock_tracer:
+         patch('src.activities.get_tracer') as mock_tracer:
 
         mock_span = MagicMock()
         mock_tracer.return_value.start_as_current_span.return_value.__enter__ = mock_span
@@ -163,7 +163,7 @@ async def test_plan_activity_fallback():
 @pytest.mark.asyncio
 async def test_plan_activity_error_handling():
     """Test plan activity error handling"""
-    from src.activities.plan import plan_activity
+    from src.activities import plan_activity
 
     mock_context = {"goal": "Test goal"}
 
@@ -173,9 +173,9 @@ async def test_plan_activity_error_handling():
     mock_activity_info.run_id = "test-run-456"
     mock_activity_info.attempt = 1
 
-    with patch('src.activities.plan.llm_json', side_effect=Exception("LLM Error")) as mock_llm, \
+    with patch('src.activities.llm_json', side_effect=Exception("LLM Error")) as mock_llm, \
          patch('temporalio.activity.info', return_value=mock_activity_info), \
-         patch('src.activities.plan.get_tracer') as mock_tracer:
+         patch('src.activities.get_tracer') as mock_tracer:
 
         mock_span = MagicMock()
         mock_tracer.return_value.start_as_current_span.return_value.__enter__ = mock_span
@@ -188,7 +188,7 @@ async def test_plan_activity_error_handling():
 @pytest.mark.asyncio
 async def test_plan_activity_empty_goal():
     """Test plan activity with empty goal"""
-    from src.activities.plan import plan_activity
+    from src.activities import plan_activity
 
     mock_context = {"goal": ""}
 
@@ -207,9 +207,9 @@ async def test_plan_activity_empty_goal():
     mock_activity_info.run_id = "test-run-456"
     mock_activity_info.attempt = 1
 
-    with patch('src.activities.plan.llm_json', return_value=mock_response) as mock_llm, \
+    with patch('src.activities.llm_json', return_value=mock_response) as mock_llm, \
          patch('temporalio.activity.info', return_value=mock_activity_info), \
-         patch('src.activities.plan.get_tracer') as mock_tracer:
+         patch('src.activities.get_tracer') as mock_tracer:
 
         mock_span = MagicMock()
         mock_tracer.return_value.start_as_current_span.return_value.__enter__ = mock_span

@@ -43,7 +43,7 @@ const suggestedActions = [
 
 function PureSuggestedActions({ onActionClick }: SuggestedActionsProps) {
   return (
-    <div className="grid grid-cols-2 gap-4 p-4">
+    <div data-testid="suggested-actions" className="grid grid-cols-2 gap-4 p-4">
       {suggestedActions.map((action, index) => {
         const IconComponent = action.icon;
         return (

@@ -43,7 +43,9 @@ function PureMessages({
             <div key={message.id} className="flex gap-3">
               <div className="flex-1">
                 <div className={`flex gap-2 max-w-[70%] ${message.role === 'user' ? 'justify-end ml-auto' : 'justify-start'}`}>
-                  <div className={`rounded-lg p-3 ${
+                  <div
+                    data-testid={`message-${message.role}`}
+                    className={`rounded-lg p-3 ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground dark:bg-[hsl(var(--message-user-bg))] dark:text-[hsl(var(--message-user-text))]'
                       : 'bg-card border text-card-foreground dark:bg-[hsl(var(--message-assistant-bg))] dark:text-[hsl(var(--message-assistant-text))]'

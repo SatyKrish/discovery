@@ -3,6 +3,7 @@
 - Temporal **Workflows** orchestrate; all LLM/tool/IO is in **Activities** with retries/timeouts/heartbeats.
 - **OpenAI Agents SDK** drives the decision loop inside an Activity (Option B).
 - HITL via Temporal signals (`user_message`, `approve_tool`) + query (`get_status`).
+- Generic MCP registry (stdio + HTTP) discovers tools and prompt packs; subagents can request extra tools with human approval.
 - OTEL tracing included; Search Attributes for filtering in Temporal Web.
 
 ## Run

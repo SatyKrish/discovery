@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 
 from temporalio.client import Client
@@ -14,14 +13,15 @@ from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.workflows.subagent import SubAgentWorkflow
 from src.activities import (
+    discover_mcp_tools,
+    get_prompt,
+    guardrail_check,
+    append_transcript,
     plan_activity,
+    summarize_activity,
     decision_agents_activity,
     tool_dispatch,
-    discover_mcp_tools,
-    summarize_activity,
-    append_transcript,
-    guardrail_check,
-    vfs_put,
+    mcp_invoke,
 )
 
 
@@ -56,14 +56,15 @@ async def main():
         task_queue=settings.task_queue,
         workflows=[AgentOrchestratorWorkflow, SubAgentWorkflow],
         activities=[
+            discover_mcp_tools,
+            get_prompt,
+            guardrail_check,
+            append_transcript,
             plan_activity,
+            summarize_activity,
             decision_agents_activity,
             tool_dispatch,
-            discover_mcp_tools,
-            vfs_put,
-            summarize_activity,
-            append_transcript,
-            guardrail_check,
+            mcp_invoke,
         ],
         # build_id="v1",  # enable Worker Versioning in prod
     )

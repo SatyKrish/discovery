@@ -58,6 +58,9 @@ class State:
     # Enhancements
     last_tool_approval: Optional[bool] = None
     next_turn_id: int = 1
+    discovered_tools: List[dict] = field(default_factory=list)
+    discovered_prompts: List[str] = field(default_factory=list)
+    pending_tool_access: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # child_id -> {tools, rationale}
 
     def view_for_llm(self) -> dict:
         recent = self.memory.short_term[-20:] if len(self.memory.short_term) > 20 else self.memory.short_term
@@ -71,6 +74,8 @@ class State:
             "user_patterns": self.memory.long_term_patterns,
             "gate_ok": self.gate_ok,
             "last_response_id": self.last_response_id,
+            "available_tools": self.discovered_tools,
+            "available_prompts": self.discovered_prompts,
         }
 
     def should_summarize(self) -> bool:
@@ -98,6 +103,18 @@ class AgentOrchestratorWorkflow:
             self.state.last_tool_approval = approved
             self.state.pending_tool_call = None
 
+    # child → parent: request additional tools
+    @workflow.signal
+    async def request_tool_access(self, child_id: str, tools: List[str], rationale: str):
+        self.state.pending_tool_access[child_id] = {"tools": tools, "rationale": rationale}
+
+    # external → parent: approve; parent → child: grant
+    @workflow.signal
+    async def approve_tool_access(self, child_id: str, approved_tools: List[str]):
+        handle = workflow.get_external_workflow_handle(child_id)
+        await handle.signal("grant_tool_access", approved_tools)
+        self.state.pending_tool_access.pop(child_id, None)
+
     @workflow.signal
     async def end_conversation(self):
         self.state.done = True
@@ -106,6 +123,10 @@ class AgentOrchestratorWorkflow:
     @workflow.query
     def get_conversation_history(self) -> List[Message]:
         return list(self.state.memory.short_term)
+
+    @workflow.query
+    def get_pending_tool_access(self) -> Dict[str, Dict[str, Any]]:
+        return self.state.pending_tool_access
 
     # ---------- Updates ----------
     @workflow.update
@@ -229,6 +250,8 @@ class AgentOrchestratorWorkflow:
     async def _spawn_subagents(self, specs: List[SubAgentSpec]) -> List[SubAgentResult]:
         children = []
         for i, spec in enumerate(specs):
+            if not spec.parent_workflow_id:
+                spec.parent_workflow_id = workflow.info().workflow_id
             child = workflow.start_child_workflow(
                 SubAgentWorkflow.run,
                 spec,
@@ -264,7 +287,11 @@ class AgentOrchestratorWorkflow:
             retry_policy=RetryPolicy(maximum_attempts=2),
         )
         if not discovery.get("success"):
-            workflow.logger.warning(f"Tool discovery failed: {discovery.get('error','unknown')}")
+            workflow.logger.warning(
+                f"Tool discovery failed: {discovery.get('error','unknown')}"
+            )
+        self.state.discovered_tools = discovery.get("tools", [])
+        self.state.discovered_prompts = discovery.get("prompts", [])
 
         # Initial plan
         plan_data = await workflow.execute_activity(

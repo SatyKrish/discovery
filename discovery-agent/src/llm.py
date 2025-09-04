@@ -34,12 +34,23 @@ class _OpenAI:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                "response_format": {"type": "json_object"},
+                "text": {
+                    "format": {"type": "json_object"}
+                },
             }
+
             if json_schema:
-                params["response_format"] = {
-                    "type": "json_schema",
-                    "json_schema": {"name": "discovery_output", "schema": json_schema, "strict": True},
+                params["text"] = {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "discovery_output",
+                        "schema": json_schema,
+                        "strict": False  # Relaxed for decision-making phase
+                    }
+                }
+            else:
+                params["text"] = {
+                    "format": {"type": "json_object"}
                 }
             if temperature is not None:
                 params["temperature"] = temperature

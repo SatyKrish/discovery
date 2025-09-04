@@ -20,6 +20,9 @@ opentelemetry-instrumentation-httpx==0.57b0
 # MCP support
 mcp>=1.13.0
 
+# validation
+jsonschema>=4.23.0
+
 # testing
 pytest>=8.3.0
 pytest-asyncio>=0.23.0

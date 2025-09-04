@@ -2,15 +2,32 @@
 # File: src/config.py (minimal settings used by LLM helper)
 # ──────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
-import os
-from dataclasses import dataclass
+import os, json
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
+
+def _json_env(name: str, default):
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except Exception:
+        return default
 
 @dataclass
 class Settings:
-    # OpenAI configuration
+    # OpenAI / Azure OpenAI (Responses API). For Azure, set base_url to your deployment endpoint
+    # and OPENAI_MODEL to your *deployment name*.
     openai_base_url: str | None = os.getenv("OPENAI_BASE_URL")
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     default_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    # MCP providers (stdio & http). Configure via env:
+    # MCP_STDIO='[{"name":"local","cmd":["node","./mcp.js"],"cwd":"/srv","env":{"FOO":"1"}}]'
+    # MCP_HTTP='[{"name":"meta","base_url":"https://mcp.example.com","headers":{"Authorization":"Bearer X"}}]'
+    mcp_stdio: List[Dict[str, Any]] = field(default_factory=lambda: _json_env("MCP_STDIO", []))
+    mcp_http: List[Dict[str, Any]] = field(default_factory=lambda: _json_env("MCP_HTTP", []))
 
     # Temporal configuration
     temporal_target: str = os.getenv("TEMPORAL_TARGET", "localhost:7233")

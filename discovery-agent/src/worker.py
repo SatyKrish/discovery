@@ -25,7 +25,7 @@ from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.workflows.subagent import SubAgentWorkflow
 from src.activities import (
     plan_activity,
-    decision_agents_activity,
+    deep_agent_activity,
     tool_dispatch,
     discover_mcp_tools,
     get_prompt,
@@ -56,7 +56,7 @@ async def main():
         workflows=[AgentOrchestratorWorkflow, SubAgentWorkflow],
         activities=[
             plan_activity,
-            decision_agents_activity,
+            deep_agent_activity,
             tool_dispatch,
             discover_mcp_tools,
             get_prompt,

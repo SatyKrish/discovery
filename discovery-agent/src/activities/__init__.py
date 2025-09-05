@@ -1,6 +1,6 @@
 # Activities package
 from .plan import plan_activity
-from .decision_agents import decision_agents_activity
+from .deep_agent import deep_agent_activity
 from .tool_dispatch import tool_dispatch
 from .discover_mcp_tools import discover_mcp_tools
 from .get_prompt import get_prompt
@@ -12,7 +12,7 @@ from .vfs import vfs_put
 
 __all__ = [
     "plan_activity",
-    "decision_agents_activity",
+    "deep_agent_activity",
     "tool_dispatch",
     "discover_mcp_tools",
     "get_prompt",

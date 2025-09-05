@@ -4,12 +4,22 @@ import asyncio
 import os
 from pathlib import Path
 
+# Load environment overrides (dev) BEFORE importing config
+try:
+    from dotenv import load_dotenv
+    for f in (".env", ".env.local"):
+        p = Path(f)
+        if p.exists():
+            load_dotenv(p)
+except Exception:
+    pass
+
 from temporalio.client import Client
 from temporalio.worker import Worker
 from temporalio.contrib.openai_agents import OpenAIAgentsPlugin, ModelActivityParameters
 from temporalio.contrib.pydantic import pydantic_data_converter
 
-from src.config import settings, apply_openai_env_from_settings
+from src.config import settings
 from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.workflows.subagent import SubAgentWorkflow
@@ -27,18 +37,6 @@ from src.activities import (
 
 
 async def main():
-    # Load environment overrides (dev)
-    try:
-        from dotenv import load_dotenv
-        for f in (".env", ".env.local"):
-            p = Path(f)
-            if p.exists():
-                load_dotenv(p)
-    except Exception:
-        pass
-
-    # Project OpenAI/Azure params into env BEFORE creating clients
-    apply_openai_env_from_settings()
 
     setup_tracing(settings.otel_service_name_worker, settings.otel_endpoint)
 

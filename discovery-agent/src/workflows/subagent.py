@@ -9,11 +9,10 @@ from typing import List
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
-from agents import Agent, Runner, ModelSettings
+from agents import Agent, Runner
 
 from src.config import settings
 from src.models_subagent import SubAgentSpec, SubAgentResult
-from src.activities import mcp_invoke as MCPInvokeActivity, get_prompt as GetPromptActivity
 
 @workflow.defn
 class SubAgentWorkflow:
@@ -36,7 +35,7 @@ class SubAgentWorkflow:
         instructions = (spec.instructions or "").strip()
         if not instructions and spec.instructions_ref:
             got = await workflow.execute_activity(
-                GetPromptActivity,
+                "get_prompt",
                 spec.instructions_ref,
                 start_to_close_timeout=timedelta(seconds=20),
                 retry_policy=RetryPolicy(maximum_attempts=2),
@@ -68,12 +67,11 @@ class SubAgentWorkflow:
         agent = Agent(
             name=f"{spec.kind} subagent",
             instructions="Follow the JSON provided in system content exactly.",
-            model=settings.default_model,
             tools=[],  # Tools will be handled automatically by the integration
         )
 
         while workflow.now() < deadline:
-            result = await Runner.run(agent, msgs, run_config={"workflow_name": "SubAgent"}, max_turns=4)
+            result = await Runner.run(agent, msgs, max_turns=4)
 
             txt = (result.final_output or "").strip() if hasattr(result, "final_output") else ""
             if txt:

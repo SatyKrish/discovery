@@ -1,108 +1,150 @@
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 # File: src/llm.py
-# OpenAI Responses API helper with structured output + tools support
-# ──────────────────────────────────────────────────────────────────────────────
+# Azure/OpenAI Responses API — JSON-only (structured output)
+# ──────────────────────────────────────────────────────────────
 from __future__ import annotations
+
 import json
 import logging
+import time
 from typing import Any, Dict, Optional
+
 from src.config import settings
 
 log = logging.getLogger(__name__)
 
+__all__ = ["generate_json"]
+
 class LLMError(Exception):
+    """Single error type for the LLM client."""
     pass
 
-class _OpenAI:
-    def __init__(self):
-        from openai import OpenAI
-        kwargs: Dict[str, Any] = {}
-        if settings.openai_base_url:
-            kwargs["base_url"] = settings.openai_base_url
-        if settings.openai_api_key:
-            kwargs["api_key"] = settings.openai_api_key
-        self.client = OpenAI(**kwargs)
 
-    def json(self, system: str, user: str, model: str,
-             *, json_schema: Optional[Dict[str, Any]] = None,
-             temperature: Optional[float] = None,
-             max_output_tokens: Optional[int] = None) -> Dict[str, Any]:
+# ---------- internals ----------
+
+def _normalize_azure_base_url(url: str) -> str:
+    """
+    Ensures Azure-style base URL ends with /openai/v1/
+    Accepts:
+      https://<resource>.openai.azure.com/
+      https://<resource>.openai.azure.com/openai/
+      https://<resource>.openai.azure.com/openai/v1/
+    """
+    url = url.rstrip("/") + "/"
+    if "azure.com" in url and not url.endswith("openai/v1/"):
+        if url.endswith("openai/"):
+            url += "v1/"
+        else:
+            url += "openai/v1/"
+    return url
+
+
+def _client():
+    from openai import OpenAI
+
+    if not settings.openai_api_key:
+        raise LLMError("Missing OPENAI_API_KEY/AZURE_OPENAI_API_KEY in config.")
+    kwargs: Dict[str, Any] = {"api_key": settings.openai_api_key}
+
+    if settings.openai_base_url:
+        kwargs["base_url"] = _normalize_azure_base_url(settings.openai_base_url)
+
+    try:
+        return OpenAI(**kwargs)
+    except Exception as e:
+        raise LLMError(f"Failed to create OpenAI client: {e}") from e
+
+
+def _response_format(json_schema: Optional[Dict[str, Any]], strict: bool) -> Dict[str, Any]:
+    # Prefer schema when provided; otherwise force JSON object
+    if json_schema:
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "structured_output",
+                "schema": json_schema,
+                "strict": strict,
+            },
+        }
+    return {"type": "json_object"}
+
+
+def _retry(call, *, attempts: int = 3, base_delay: float = 1.0, max_delay: float = 30.0, backoff: float = 2.0):
+    last = None
+    for i in range(attempts):
         try:
-            params: Dict[str, Any] = {
-                "model": model,
-                "input": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                "text": {
-                    "format": {"type": "json_object"}
-                },
-            }
-
-            if json_schema:
-                params["text"] = {
-                    "format": {
-                        "type": "json_schema",
-                        "name": "discovery_output",
-                        "schema": json_schema,
-                        "strict": False  # Relaxed for decision-making phase
-                    }
-                }
-            else:
-                params["text"] = {
-                    "format": {"type": "json_object"}
-                }
-            if temperature is not None:
-                params["temperature"] = temperature
-            if max_output_tokens is not None:
-                params["max_output_tokens"] = max_output_tokens
-
-            resp = self.client.responses.create(**params)
-            txt = getattr(resp, "output_text", None)
-            if not txt:
-                raise LLMError("Responses API returned no output_text")
-            try:
-                return json.loads(txt)
-            except json.JSONDecodeError:
-                salvaged = _coerce_json(txt)
-                return json.loads(salvaged)
+            return call()
         except Exception as e:
-            log.exception("OpenAI Responses API call failed")
-            raise LLMError(str(e)) from e
+            last = e
+            msg = str(e).lower()
+            retryable = any(s in msg for s in ("timeout", "connection", "network", "server error", "rate limit"))
+            if i < attempts - 1 and retryable:
+                delay = min(base_delay * (backoff ** i), max_delay)
+                log.warning(f"LLM call failed (attempt {i+1}/{attempts}); retrying in {delay:.1f}s: {e}")
+                time.sleep(delay)
+                continue
+            break
+    raise LLMError(f"LLM call failed after {attempts} attempts: {last}") from last
 
-    def tools(self, messages: list[dict], tools: list[dict], model: str,
-              *, tool_choice: str = "auto") -> Any:
-        try:
-            resp = self.client.responses.create(
-                model=model,
-                input=messages,
-                tools=tools,
-                tool_choice=tool_choice,
-            )
-            return resp
-        except Exception as e:
-            log.exception("OpenAI Responses API (tools) call failed")
-            raise LLMError(str(e)) from e
 
-_def_provider: _OpenAI | None = None
+def _require_non_empty(name: str, value: Any):
+    if not isinstance(value, str) or not value.strip():
+        raise LLMError(f"{name} must be a non-empty string")
 
-def _provider() -> _OpenAI:
-    global _def_provider
-    if _def_provider:
-        return _def_provider
-    _def_provider = _OpenAI()
-    return _def_provider
 
-# naive JSON salvage when model wraps JSON in prose
+# ---------- public API (JSON-only) ----------
 
-def _coerce_json(txt: str) -> str:
-    start = txt.find("{")
-    end = txt.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return txt[start : end + 1]
-    raise LLMError("No JSON object found in LLM reply")
+def generate_json(
+    system: str,
+    user: str,
+    model: str,
+    *,
+    json_schema: Optional[Dict[str, Any]] = None,
+    strict_schema: bool = True,
+    temperature: Optional[float] = None,
+    max_output_tokens: Optional[int] = None,
+    retry: bool = True,
+) -> Dict[str, Any]:
+    """
+    Generate structured JSON via the Responses API.
+    - If `json_schema` is provided, schema enforcement is used (strict by default).
+    - Returns a parsed dict.
+    """
+    _require_non_empty("system", system)
+    _require_non_empty("user", user)
+    _require_non_empty("model", model)
 
-# public convenience
+    params: Dict[str, Any] = {
+        "model": model,  # Azure deployment name
+        "input": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "response_format": _response_format(json_schema, strict_schema),
+    }
+    if temperature is not None:
+        if not (0.0 <= temperature <= 2.0):
+            raise LLMError("temperature must be between 0.0 and 2.0")
+        params["temperature"] = float(temperature)
+    if max_output_tokens is not None:
+        if max_output_tokens <= 0:
+            raise LLMError("max_output_tokens must be positive")
+        params["max_output_tokens"] = int(max_output_tokens)
 
-def llm_json(system: str, user: str, model: str, **kw) -> Dict[str, Any]:
-    return _provider().json(system, user, model, **kw)
+    client = _client()
+    call = lambda: client.responses.create(**params)
+    resp = _retry(call) if retry else call()
+
+    txt = getattr(resp, "output_text", None)
+    if not txt:
+        raise LLMError("Responses API returned no output_text")
+
+    # With strict schema, this should be clean JSON; still guard-parse.
+    try:
+        return json.loads(txt)
+    except json.JSONDecodeError:
+        # Best effort salvage if strict=False and model added prose
+        start, end = txt.find("{"), txt.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(txt[start : end + 1])
+        raise LLMError("Could not parse JSON from model output")

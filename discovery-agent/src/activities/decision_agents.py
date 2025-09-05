@@ -1,11 +1,28 @@
 from __future__ import annotations
 from temporalio import activity
 from opentelemetry import trace
-from agents import Agent, FunctionTool
+from agents import Agent, FunctionTool, Model, ModelProvider, OpenAIChatCompletionsModel, RunConfig
 from agents.run import Runner
 from typing import Callable, Dict, Any, List
 import json
 from src.registry import list_tool_specs
+from src.config import settings
+from openai import AsyncOpenAI
+
+# Custom Azure OpenAI provider
+client = AsyncOpenAI(
+    base_url=settings.openai_base_url,
+    api_key=settings.openai_api_key,
+)
+
+class CustomModelProvider(ModelProvider):
+    def get_model(self, model_name: str | None) -> Model:
+        return OpenAIChatCompletionsModel(
+            model=model_name or settings.openai_model,
+            openai_client=client
+        )
+
+CUSTOM_MODEL_PROVIDER = CustomModelProvider()
 
 tracer = trace.get_tracer(__name__)
 
@@ -128,7 +145,11 @@ async def decision_agents_activity(state_view: dict) -> dict:
 
         # Run the agent via the SDK Runner; pass state_view as a JSON string input
         import json as _json
-        run_result = await Runner.run(agent, _json.dumps(state_view))
+        run_result = await Runner.run(
+            agent,
+            _json.dumps(state_view),
+            run_config=RunConfig(model_provider=CUSTOM_MODEL_PROVIDER),
+        )
 
         # Look for our sentinel in tool call outputs produced by function tools
         for item in run_result.new_items:

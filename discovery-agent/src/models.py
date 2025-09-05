@@ -50,6 +50,11 @@ class ConversationMemory(BaseModel):
 class PlanningContext(BaseModel):
     goal: str
 
+class ToolSpec(BaseModel):
+    name: str
+    description: str = ""
+    input_schema: Dict[str, Any] = Field(default_factory=dict)
+
 # ----- Assistant decision contract -------------------------------------------
 class AssistantAction(BaseModel):
     # type: "assistant_message" | "revise_plan" | "tool_call" | "spawn_subagents"

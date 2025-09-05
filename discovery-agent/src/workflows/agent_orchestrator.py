@@ -384,6 +384,6 @@ class AgentOrchestratorWorkflow:
                 "final_plan": [p.model_dump() for p in self.state.plan],
                 "artifacts": [a.model_dump() for a in self.state.artifacts],
                 "conversation_history": [msg.model_dump() for msg in self.state.memory.short_term],
-                "memory_summary": self.memory.summary,
+                "memory_summary": self.state.memory.summary,
                 "last_response_id": self.state.last_response_id,
             }

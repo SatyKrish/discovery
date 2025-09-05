@@ -1,11 +1,37 @@
 from __future__ import annotations
+import json
 from typing import List, Dict, Any
 from temporalio import activity
 from src.models import PlanItem
-from src.llm import llm_json
+from openai import AsyncOpenAI
+from agents import (
+    Agent,
+    Model,
+    ModelProvider,
+    OpenAIChatCompletionsModel,
+    RunConfig,
+    Runner,
+    set_tracing_disabled,
+)
 from src.config import settings
 from src.otel import get_tracer
 from opentelemetry.trace import Status, StatusCode
+
+# Custom Azure OpenAI provider
+client = AsyncOpenAI(
+    base_url=settings.openai_base_url,
+    api_key=settings.openai_api_key,
+)
+set_tracing_disabled(disabled=True)
+
+class CustomModelProvider(ModelProvider):
+    def get_model(self, model_name: str | None) -> Model:
+        return OpenAIChatCompletionsModel(
+            model=model_name or settings.openai_model,
+            openai_client=client
+        )
+
+CUSTOM_MODEL_PROVIDER = CustomModelProvider()
 
 tracer = get_tracer(__name__)
 
@@ -55,7 +81,25 @@ async def plan_activity(context: dict) -> List[Dict[str, Any]]:
         span.set_attribute("temporal.run_id", ai.workflow_run_id)
         span.set_attribute("temporal.attempt", ai.attempt)
         try:
-            data = llm_json(system, user, settings.llm_model_plan)
+            # Use agents framework with custom Azure OpenAI provider
+            agent = Agent(
+                name="Planning Agent",
+                instructions=system,
+            )
+            result = await Runner.run(
+                agent,
+                user,
+                run_config=RunConfig(model_provider=CUSTOM_MODEL_PROVIDER),
+            )
+            data = result.final_output
+
+            # Parse JSON output from agents framework
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except json.JSONDecodeError:
+                    # If not valid JSON, wrap in expected format
+                    data = {"plan": []}
 
             # Handle the new hierarchical planning format
             if isinstance(data, dict) and "subgoals" in data:

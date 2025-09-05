@@ -1,33 +1,19 @@
-# ──────────────────────────────────────────────────────────────────────────────
-# File: src/config.py (minimal settings used by LLM helper)
-# ──────────────────────────────────────────────────────────────────────────────
+# Simplified Azure OpenAI configuration
 from __future__ import annotations
-import os, json
+import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-def _json_env(name: str, default):
-    raw = os.getenv(name)
-    if not raw:
-        return default
-    try:
-        return json.loads(raw)
-    except Exception:
-        return default
-
 @dataclass
 class Settings:
-    # OpenAI / Azure OpenAI (Responses API). For Azure, set base_url to your deployment endpoint
-    # and OPENAI_MODEL to your *deployment name*.
-    openai_base_url: str | None = os.getenv("OPENAI_BASE_URL")
-    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
-    default_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    # OpenAI configuration
+    openai_base_url: str = os.getenv("OPENAI_BASE_URL", "")
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5-mini")  # Azure deployment name
 
-    # MCP providers (stdio & http). Configure via env:
-    # MCP_STDIO='[{"name":"local","cmd":["node","./mcp.js"],"cwd":"/srv","env":{"FOO":"1"}}]'
-    # MCP_HTTP='[{"name":"meta","base_url":"https://mcp.example.com","headers":{"Authorization":"Bearer X"}}]'
-    mcp_stdio: List[Dict[str, Any]] = field(default_factory=lambda: _json_env("MCP_STDIO", []))
-    mcp_http: List[Dict[str, Any]] = field(default_factory=lambda: _json_env("MCP_HTTP", []))
+    # MCP providers
+    mcp_stdio: List[Dict[str, Any]] = field(default_factory=list)
+    mcp_http: List[Dict[str, Any]] = field(default_factory=list)
 
     # Temporal configuration
     temporal_target: str = os.getenv("TEMPORAL_TARGET", "localhost:7233")
@@ -43,25 +29,3 @@ class Settings:
     vfs_root: str = os.getenv("VFS_ROOT", "/tmp/agent_vfs")
 
 settings = Settings()
-
-# Helpers for activity processes that may run outside the workflow sandbox
-
-def apply_openai_env_from_settings():
-    """Apply OpenAI settings to environment variables, handling both standard and Azure configurations"""
-
-    # Handle Azure OpenAI configuration
-    az_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
-    az_key = os.environ.get("AZURE_OPENAI_API_KEY")
-
-    if az_endpoint and not os.environ.get("OPENAI_BASE_URL"):
-        # Convert Azure endpoint to OpenAI-compatible base URL
-        os.environ["OPENAI_BASE_URL"] = az_endpoint.rstrip("/") + "/openai/v1/"
-
-    if az_key and not os.environ.get("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = az_key
-
-    # Handle standard OpenAI configuration (fallback)
-    if settings.openai_base_url:
-        os.environ.setdefault("OPENAI_BASE_URL", settings.openai_base_url)
-    if settings.openai_api_key:
-        os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)

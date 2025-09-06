@@ -1,23 +1,119 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# File: src/activities/deep_agent.py
+# Optimized deep agent with fast responses and dynamic tool integration
+# ──────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
 from temporalio import activity
 from opentelemetry import trace
-from agents import Agent, FunctionTool
+from agents import Agent, FunctionTool, Model, ModelProvider, OpenAIChatCompletionsModel, RunConfig
 from agents.run import Runner
 from typing import Callable, Dict, Any, List
 import json
+import time
 from src.registry import list_tool_specs
+from src.config import settings
+from openai import AsyncOpenAI
+
+# Custom Azure OpenAI provider
+client = AsyncOpenAI(
+    base_url=settings.openai_base_url,
+    api_key=settings.openai_api_key,
+)
+
+class CustomModelProvider(ModelProvider):
+    def get_model(self, model_name: str | None) -> Model:
+        return OpenAIChatCompletionsModel(
+            model=model_name or settings.openai_model,
+            openai_client=client
+        )
+
+CUSTOM_MODEL_PROVIDER = CustomModelProvider()
 
 tracer = trace.get_tracer(__name__)
 
-# Build agent-visible tool shims with per-tool JSON schemas
+# Global cache for expensive operations
+_cached_agent = None
+_cached_tools = None
+_cache_timestamp = None
+CACHE_DURATION = 300  # 5 minutes
 
+def _build_dynamic_instructions(available_tools: List[dict]) -> str:
+    """Build instructions dynamically based on available tools"""
+
+    # Format available tools for the prompt
+    tool_list = []
+    for tool in available_tools:
+        if isinstance(tool, dict) and 'name' in tool:
+            tool_list.append(tool['name'])
+        elif hasattr(tool, 'name'):
+            tool_list.append(tool.name)
+
+    tools_str = ", ".join(tool_list) if tool_list else "echo.echo, calculator.calculate, web-search.web_search"
+
+    return f"""
+You are a DeepAgent, a conversational AI assistant with access to tools and sub-agents.
+
+Your role is to decide when to respond directly, when to call a tool, and when to spawn sub-agents. 
+Keep interactions fast, helpful, and predictable.
+
+**FAST RESPONSES (no reasoning or tool calls needed):**
+- Greetings (hi, hello, hey) → Respond warmly and ask how to help.
+- Small talk (how are you, what's your name, are you there) → Short, friendly answer.
+- Thanks / closing (thanks, bye) → Polite acknowledgement and offer further help.
+- Status checks (ready?, working?) → Confirm you are available and ready.
+
+**SIMPLE CLARIFICATIONS:**
+- If the user asks what you can do, summarize briefly: 
+  "I can chat, answer simple questions, and for complex tasks I can plan and use tools."
+
+**COMPLEX TASKS (invoke agent loop):**
+- Use tools only when external data, search, or computation is required.
+- Spawn sub-agents only for multi-step workflows (e.g., planning a trip, validating data, generating a report).
+- If input is ambiguous, ask 1 short clarifying question before proceeding.
+
+**GUIDELINES:**
+- Default to a direct conversational reply unless external action is explicitly needed.
+- Keep trivial responses ≤ 2 sentences.
+- For tool use, always output a JSON object:
+  {{ "tool_call": {{ "tool": "<tool_name>", "parameters": {{ ... }} }} }}
+- For sub-agent workflows, describe the sub-agent spec in JSON.
+- Always be friendly, efficient, and safe.
+""".strip()
+
+def _get_cached_agent():
+    """Get cached agent and tools with automatic refresh"""
+    global _cached_agent, _cached_tools, _cache_timestamp
+
+    now = time.time()
+    if (_cached_agent is None or
+        _cache_timestamp is None or
+        (now - _cache_timestamp) > CACHE_DURATION):
+
+        # Get fresh tool specs
+        tool_specs = list_tool_specs()
+        _cached_tools = _collect_agent_tools()
+
+        # Build dynamic instructions
+        instructions = _build_dynamic_instructions(tool_specs)
+
+        # Create agent with optimized instructions
+        _cached_agent = Agent(
+            name="orchestrator",
+            instructions=instructions,
+            tools=_cached_tools
+        )
+        _cache_timestamp = now
+
+    return _cached_agent, _cached_tools
+
+# Build agent-visible tool shims with per-tool JSON schemas
 def _make_agent_tool(name: str, schema: Dict[str, Any], description: str) -> FunctionTool:
     async def _on_invoke_tool(ctx, input: str):
         try:
             args = json.loads(input) if input else {}
         except Exception:
             args = {}
-        # Provide a sentinel that decision_agents_activity will convert to a ToolCall action
+        # Provide a sentinel that deep_agent_activity will convert to a ToolCall action
         return {"_tool_request": {"name": name, "args": args}}
 
     return FunctionTool(
@@ -27,13 +123,12 @@ def _make_agent_tool(name: str, schema: Dict[str, Any], description: str) -> Fun
         on_invoke_tool=_on_invoke_tool,
     )
 
-
 def _collect_agent_tools() -> List[FunctionTool]:
+    """Collect tools from registry"""
     tools: List[FunctionTool] = []
     for spec in list_tool_specs():
         tools.append(_make_agent_tool(spec.name, spec.input_schema or {}, spec.description or spec.name))
     return tools
-
 
 def _detect_json_tool_call(content: str) -> Dict[str, Any] | None:
     """Detect tool calls in JSON format from agent output"""
@@ -78,7 +173,6 @@ def _detect_json_tool_call(content: str) -> Dict[str, Any] | None:
 
     return None
 
-
 def _infer_server_prefix(tool_name: str) -> str:
     """Infer MCP server prefix based on tool name"""
     tool_mappings = {
@@ -99,38 +193,28 @@ def _infer_server_prefix(tool_name: str) -> str:
     return f"web-search.{tool_name}"  # Default fallback
 
 @activity.defn
-async def decision_agents_activity(state_view: dict) -> dict:
+async def deep_agent_activity(state_view: dict) -> dict:
+    """Optimized deep agent activity with fast responses and caching"""
     info = activity.info()
-    with tracer.start_as_current_span("decision_agents_activity") as span:
+
+    with tracer.start_as_current_span("deep_agent_activity") as span:
         span.set_attribute("temporal.workflow_id", info.workflow_id)
         span.set_attribute("temporal.run_id", info.workflow_run_id)
         span.set_attribute("temporal.attempt", info.attempt)
 
-        agent = Agent(
-            name="orchestrator",
-            instructions=(
-                "You are a conversational AI assistant. Based on the user's message and current plan, "
-                "decide your next action. You can either:\n"
-                "1. Respond directly to the user with a helpful message (assistant_message)\n"
-                "2. Call a tool to perform an action (tool_call)\n"
-                "3. Revise the current plan (revise_plan)\n"
-                "4. Spawn a subagent for complex tasks (spawn_subagent)\n\n"
-                "For assistant_message: Provide a natural, conversational response to the user.\n"
-                "For tool_call: Use the available tools and return JSON with tool details.\n"
-                "For other actions: Return the appropriate JSON structure.\n\n"
-                "Available tools: echo.echo, calculator.calculate, web-search.web_search\n"
-                "Use proper tool names with server prefixes (e.g., 'web-search.web_search')\n"
-                "If you need to call a tool, return a JSON object with 'tool_call' and 'parameters' fields.\n"
-                "The tool will be executed immediately and results will be provided in the next response."
+        # Use cached agent and tools for performance
+        agent, tools = _get_cached_agent()
+
+        # Run agent decision with optimized settings
+        run_result = await Runner.run(
+            agent,
+            json.dumps(state_view),
+            run_config=RunConfig(
+                model_provider=CUSTOM_MODEL_PROVIDER
             ),
-            tools=_collect_agent_tools(),
         )
 
-        # Run the agent via the SDK Runner; pass state_view as a JSON string input
-        import json as _json
-        run_result = await Runner.run(agent, _json.dumps(state_view))
-
-        # Look for our sentinel in tool call outputs produced by function tools
+        # Check for tool calls in function outputs (fastest path)
         for item in run_result.new_items:
             if getattr(item, "type", "") == "tool_call_output_item":
                 out = getattr(item, "output", None)
@@ -139,7 +223,7 @@ async def decision_agents_activity(state_view: dict) -> dict:
                     return {
                         "type": "tool_call",
                         "call": {
-                            "id": "tc-" + info.activity_id,
+                            "id": f"tc-{info.activity_id}",
                             "name": tr.get("name"),
                             "args": tr.get("args", {}),
                             "requires_approval": False,
@@ -149,14 +233,11 @@ async def decision_agents_activity(state_view: dict) -> dict:
                         "plan_diff": None,
                     }
 
-        # Check for tool calls in final output (enhanced detection)
+        # Check for tool calls in final output
         content = str(getattr(run_result, "final_output", ""))
-
-        # Enhanced tool call detection for JSON-formatted tool calls
         tool_call = _detect_json_tool_call(content)
 
         if tool_call:
-            # Return tool call action instead of executing immediately
             return {
                 "type": "tool_call",
                 "call": {
@@ -170,17 +251,15 @@ async def decision_agents_activity(state_view: dict) -> dict:
                 "plan_diff": None,
             }
 
-        # Try to parse JSON output to extract the actual message
+        # Extract message content
         try:
             parsed = json.loads(content)
             if isinstance(parsed, dict) and "message" in parsed:
-                # Agent returned JSON with nested message
                 if isinstance(parsed["message"], str):
                     content = parsed["message"]
                 elif isinstance(parsed["message"], dict) and "content" in parsed["message"]:
                     content = parsed["message"]["content"]
         except (json.JSONDecodeError, KeyError, TypeError):
-            # If JSON parsing fails, use the content as-is
             pass
 
         return {

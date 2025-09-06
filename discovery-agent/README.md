@@ -11,12 +11,9 @@
 3) Env (recommended via .env.local):
 ```bash
 # Azure OpenAI
-AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com/
-AZURE_OPENAI_API_KEY=<your-key>
-AZURE_OPENAI_API_VERSION=2024-05-01-preview
-# Deployment names (models)
-LLM_MODEL_DECISION=gpt-4.1
-LLM_MODEL_PLAN=gpt-4.1
+OPENAI_BASE_URL=https://<your-resource>.openai.azure.com/
+OPENAI_API_KEY=<your-key>
+OPENAI_MODEL=<your-model>
 
 # Temporal
 TEMPORAL_TARGET=localhost:7233

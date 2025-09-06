@@ -15,7 +15,7 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 import asyncio
 import json
 
-from src.config import settings, apply_openai_env_from_settings
+from src.config import settings
 from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow, TurnResult
 from src.models import Message  # your existing pydantic model
@@ -53,9 +53,6 @@ def _extract_text(msg: dict) -> str:
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown events."""
     print("🚀 Starting Discovery Agent API...")
-
-    # Apply OpenAI environment settings
-    apply_openai_env_from_settings()
 
     # Setup tracing
     setup_tracing(settings.otel_service_name_api, settings.otel_endpoint)

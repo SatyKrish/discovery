@@ -77,15 +77,11 @@ def test_tool_call_model():
 def test_structured_tool_result_model():
     """Test StructuredToolResult model"""
     result = StructuredToolResult(
-        tool_name="echo.echo",
         success=True,
-        data={"content": "Hello"},
-        execution_time=0.5
+        data={"content": "Hello"}
     )
-    assert result.tool_name == "echo.echo"
     assert result.success is True
     assert result.data == {"content": "Hello"}
-    assert result.execution_time == 0.5
 
 
 if __name__ == "__main__":

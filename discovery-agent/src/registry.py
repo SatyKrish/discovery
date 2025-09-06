@@ -68,7 +68,7 @@ async def execute_tool(name: str, args: dict):
     """Execute a tool using the orchestrator (handles MCP tools only)"""
     return await tool_orchestrator.execute_tool(name, args)
 
-# Helper for decision_agents to expose schemas to the Agent
+# Helper for deep_agent to expose schemas to the Agent
 def list_tool_specs() -> List[ToolSpec]:
     """Get all available tool specs from MCP servers"""
     return registry.specs()

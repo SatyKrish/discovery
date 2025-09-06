@@ -4,42 +4,44 @@ import asyncio
 import os
 from pathlib import Path
 
+# Load environment overrides (dev) BEFORE importing config
+try:
+    from dotenv import load_dotenv
+    for f in (".env", ".env.local"):
+        p = Path(f)
+        if p.exists():
+            load_dotenv(p)
+except Exception:
+    pass
+
 from temporalio.client import Client
 from temporalio.worker import Worker
 from temporalio.contrib.openai_agents import OpenAIAgentsPlugin, ModelActivityParameters
 from temporalio.contrib.pydantic import pydantic_data_converter
 
-from src.config import settings, apply_openai_env_from_settings
+from src.config import settings
 from src.otel import setup_tracing
 from src.workflows.agent_orchestrator import AgentOrchestratorWorkflow
 from src.workflows.subagent import SubAgentWorkflow
-from src.activities.plan import plan_activity
-from src.activities.decision_agents import decision_agents_activity
-from src.mcp.core.tool_dispatch import tool_dispatch, discover_mcp_tools
-from src.activities.vfs import vfs_put
-from src.activities.summarize import summarize_activity
-from src.activities.transcript import append_transcript
-from src.activities.guardrail import guardrail_check
+from src.activities import (
+    plan_activity,
+    deep_agent_activity,
+    tool_dispatch,
+    discover_mcp_tools,
+    get_prompt,
+    summarize_activity,
+    append_transcript,
+    guardrail_check,
+    vfs_put,
+)
 
 
 async def main():
-    # Load environment overrides (dev)
-    try:
-        from dotenv import load_dotenv
-        for f in (".env", ".env.local"):
-            p = Path(f)
-            if p.exists():
-                load_dotenv(p)
-    except Exception:
-        pass
 
     setup_tracing(settings.otel_service_name_worker, settings.otel_endpoint)
 
     # Configure Agents plugin (keeps model calls as Activities)
     agents_plugin = OpenAIAgentsPlugin(model_params=ModelActivityParameters())
-
-    # Project OpenAI/Azure params into env for Activities
-    apply_openai_env_from_settings()
 
     client = await Client.connect(
         settings.temporal_target,
@@ -54,9 +56,10 @@ async def main():
         workflows=[AgentOrchestratorWorkflow, SubAgentWorkflow],
         activities=[
             plan_activity,
-            decision_agents_activity,
+            deep_agent_activity,
             tool_dispatch,
             discover_mcp_tools,
+            get_prompt,
             vfs_put,
             summarize_activity,
             append_transcript,

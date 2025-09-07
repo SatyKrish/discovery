@@ -45,3 +45,7 @@ next-env.d.ts
 /test-results
 /# Playwright HTML reports
 /playwright-report
+
+# docs
+langgraph-platform.json
+VERCEL_LANGGRAPH_TEMPLATE.md

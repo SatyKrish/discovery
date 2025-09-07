@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { DiscoverySidebar } from '@/components/app-sidebar';
-import { AuthProvider } from '@/providers/Auth';
+
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { Toaster } from 'sonner';
 import './globals.css';
@@ -37,14 +37,14 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="antialiased">
-        <AuthProvider>
-          <ThemeProvider defaultTheme="system">
+        <ThemeProvider defaultTheme="system">
+          <SidebarProvider>
             <NuqsAdapter>
               {children}
             </NuqsAdapter>
             <Toaster position="top-right" />
-          </ThemeProvider>
-        </AuthProvider>
+          </SidebarProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

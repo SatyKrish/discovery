@@ -5,7 +5,7 @@ import { getDeployment } from "@/lib/environment/deployments";
 import { v4 as uuidv4 } from "uuid";
 import type { TodoItem, AgentState } from "@/lib/types";
 import { createClient } from "@/lib/client";
-import { useAuthContext } from "@/providers/Auth";
+
 
 export function useChat(
   threadId: string | null,
@@ -16,8 +16,6 @@ export function useChat(
   onFilesUpdate: (files: Record<string, string>) => void,
 ) {
   const deployment = useMemo(() => getDeployment(), []);
-  const { session } = useAuthContext();
-  const accessToken = session?.accessToken;
 
   const agentId = useMemo(() => {
     if (!deployment?.agentId) {
@@ -42,7 +40,7 @@ export function useChat(
 
   const stream = useStream<AgentState & Record<string, unknown>>({
     assistantId: agentId,
-    client: createClient(accessToken || ""),
+    client: createClient(),
     reconnectOnMount: true,
     threadId: threadId ?? null,
     onUpdateEvent: handleUpdateEvent,

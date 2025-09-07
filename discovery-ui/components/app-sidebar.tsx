@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/lib/client';
-import { useAuthContext } from '@/providers/Auth';
+
 import { getDeployment } from '@/lib/environment/deployments';
 import type { Thread } from '@/lib/types';
 import { extractStringFromMessageContent } from '@/lib/utils';
@@ -46,7 +46,6 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { session } = useAuthContext();
   const deployment = useMemo(() => getDeployment(), []);
 
   // Add keyboard shortcut support (Cmd/Ctrl + B to toggle sidebar)
@@ -64,10 +63,10 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
-    if (!deployment?.deploymentUrl || !session?.accessToken) return;
+    if (!deployment?.deploymentUrl) return;
     setIsLoading(true);
     try {
-      const client = createClient(session.accessToken);
+      const client = createClient();
       const response = await client.threads.search({
         limit: 30,
         sortBy: "created_at",
@@ -109,7 +108,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
     } finally {
       setIsLoading(false);
     }
-  }, [deployment?.deploymentUrl, session?.accessToken]);
+  }, [deployment?.deploymentUrl, sidebarOpen]);
 
   useEffect(() => {
     if (sidebarOpen) {

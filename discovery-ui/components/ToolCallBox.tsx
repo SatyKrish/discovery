@@ -59,13 +59,13 @@ export const ToolCallBox = React.memo<ToolCallBoxProps>(({ toolCall }) => {
   const hasContent = result || Object.keys(args).length > 0;
 
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden w-fit max-w-full">
+    <div className="bg-card border border-border rounded-lg overflow-hidden w-full max-w-full md:w-fit md:max-w-full">
       <button
         onClick={toggleExpanded}
-        className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
+        className="w-full px-3 md:px-4 py-3 flex items-center justify-between gap-2 md:gap-3 text-left hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
         disabled={!hasContent}
       >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
           {hasContent && isExpanded ? (
             <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           ) : (
@@ -77,13 +77,13 @@ export const ToolCallBox = React.memo<ToolCallBoxProps>(({ toolCall }) => {
       </button>
 
       {isExpanded && hasContent && (
-        <div className="px-4 pb-4 border-t border-border">
+        <div className="px-3 md:px-4 pb-4 border-t border-border">
           {Object.keys(args).length > 0 && (
             <div className="mt-4">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 Arguments
               </h4>
-              <pre className="bg-muted p-3 rounded-md text-xs font-mono overflow-x-auto max-w-full whitespace-pre-wrap break-all">
+              <pre className="bg-muted p-2 md:p-3 rounded-md text-xs font-mono overflow-x-auto max-w-full whitespace-pre-wrap break-all">
                 {JSON.stringify(args, null, 2)}
               </pre>
             </div>
@@ -93,7 +93,7 @@ export const ToolCallBox = React.memo<ToolCallBoxProps>(({ toolCall }) => {
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 Result
               </h4>
-              <pre className="bg-muted p-3 rounded-md text-xs font-mono overflow-x-auto max-w-full whitespace-pre-wrap break-all">
+              <pre className="bg-muted p-2 md:p-3 rounded-md text-xs font-mono overflow-x-auto max-w-full whitespace-pre-wrap break-all">
                 {typeof result === "string"
                   ? result
                   : JSON.stringify(result, null, 2)}

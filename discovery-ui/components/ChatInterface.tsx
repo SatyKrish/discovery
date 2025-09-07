@@ -182,10 +182,10 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
 
     return (
       <div className="flex flex-col h-screen w-full bg-background">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-background flex-shrink-0">
+        <div className="flex justify-between items-center px-4 md:px-6 py-4 border-b border-border bg-background flex-shrink-0">
           <div className="flex items-center gap-3">
             <Bot className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-semibold text-foreground">Discovery Agent</h1>
+            <h1 className="text-lg md:text-xl font-semibold text-foreground">Discovery Agent</h1>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -193,11 +193,18 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
               size="icon"
               onClick={handleNewThread}
               disabled={!hasMessages}
+              className="h-9 w-9"
             >
-              <SquarePen size={20} />
+              <SquarePen size={18} />
             </Button>
-            <Button variant="ghost" size="icon" onClick={toggleThreadHistory}>
-              <History size={20} />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleThreadHistory}
+              className="h-9 w-9"
+              data-testid="sidebar-toggle-button"
+            >
+              <History size={18} />
             </Button>
           </div>
         </div>
@@ -210,10 +217,10 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
           />
           <div className="flex flex-col flex-1 min-h-0">
             {!hasMessages && !isLoading && !isLoadingThreadState && (
-              <div className="flex flex-col items-center justify-center h-full px-8 text-center">
+              <div className="flex flex-col items-center justify-center h-full px-4 md:px-8 text-center">
                 <Bot size={48} className="text-muted-foreground mb-6" />
-                <h2 className="text-2xl font-semibold text-foreground mb-2">Start a conversation</h2>
-                <p className="text-muted-foreground">Ask me anything and I'll help you discover insights.</p>
+                <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-2">Start a conversation</h2>
+                <p className="text-sm md:text-base text-muted-foreground">Ask me anything and I'll help you discover insights.</p>
               </div>
             )}
             {isLoadingThreadState && (
@@ -221,7 +228,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
                 <LoaderCircle className="animate-spin w-8 h-8 text-primary" />
               </div>
             )}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
               {processedMessages.map((data) => (
                 <ChatMessage
                   key={data.message.id}
@@ -242,26 +249,34 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
             </div>
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="flex gap-3 px-6 py-4 border-t border-border bg-background flex-shrink-0">
+        <form onSubmit={handleSubmit} className="flex gap-2 md:gap-3 px-4 md:px-6 py-4 border-t border-border bg-background flex-shrink-0">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
             disabled={isLoading}
-            className="flex-1"
+            className="flex-1 text-sm md:text-base"
+            data-testid="multimodal-input"
           />
           {isLoading ? (
             <Button
               type="button"
               onClick={stopStream}
               variant="destructive"
+              size="sm"
+              className="px-3 md:px-4"
+              data-testid="stop-button"
             >
-              Stop
+              <span className="hidden sm:inline">Stop</span>
+              <SquarePen size={16} className="sm:hidden" />
             </Button>
           ) : (
             <Button
               type="submit"
               disabled={!input.trim()}
+              size="sm"
+              className="px-3 md:px-4"
+              data-testid="send-button"
             >
               <Send size={16} />
             </Button>

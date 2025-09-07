@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { MessageSquare, X } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { createClient } from "@/lib/client";
 import { useAuthContext } from "@/providers/Auth";
 import { getDeployment } from "@/lib/environment/deployments";
@@ -95,15 +96,13 @@ export const ThreadHistorySidebar = React.memo<ThreadHistorySidebarProps>(
       return groups;
     }, [threads]);
 
-    if (!open) return null;
-
-    return (
-      <div className="fixed inset-y-0 right-0 w-80 bg-background border-l border-border shadow-xl z-50 flex flex-col">
+    const sidebarContent = (
+      <div className="flex flex-col h-full">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="text-lg font-semibold text-foreground">Thread History</h3>
           <button
             onClick={() => setOpen(false)}
-            className="p-2 hover:bg-muted rounded-md transition-colors"
+            className="p-2 hover:bg-muted rounded-md transition-colors md:hidden"
           >
             <X size={20} />
           </button>
@@ -184,6 +183,27 @@ export const ThreadHistorySidebar = React.memo<ThreadHistorySidebarProps>(
           )}
         </div>
       </div>
+    );
+
+    return (
+      <>
+        {/* Mobile Sheet */}
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent side="right" className="w-80 p-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Thread History</SheetTitle>
+            </SheetHeader>
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+
+        {/* Desktop Fixed Sidebar */}
+        {open && (
+          <div className="hidden md:flex fixed inset-y-0 right-0 w-80 bg-background border-l border-border shadow-xl z-50 flex-col">
+            {sidebarContent}
+          </div>
+        )}
+      </>
     );
   },
 );

@@ -359,7 +359,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
   );
 }
 
-// Thread Item Component (moved from ThreadHistorySidebar)
+// Thread Item Component
 const ThreadItem = ({ thread, isActive, onClick }: {
   thread: Thread;
   isActive: boolean;

@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Bot, LoaderCircle, SquarePen, History, X } from "lucide-react";
+import { Send, Bot, LoaderCircle, SquarePen } from "lucide-react";
 import { ChatMessage } from "./ChatMessage";
 import type { SubAgent, TodoItem, ToolCall } from "@/lib/types";
 import { useChat } from "@/hooks/useChat";
@@ -42,7 +42,6 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
     isLoadingThreadState,
   }) => {
     const [input, setInput] = useState("");
-    const [isThreadHistoryOpen, setIsThreadHistoryOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const { messages, isLoading, sendMessage, stopStream } = useChat(
@@ -72,21 +71,8 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
       if (isLoading) {
         stopStream();
       }
-      setIsThreadHistoryOpen(false);
       onNewThread();
     }, [isLoading, stopStream, onNewThread]);
-
-    const handleThreadSelect = useCallback(
-      (id: string) => {
-        setThreadId(id);
-        setIsThreadHistoryOpen(false);
-      },
-      [setThreadId],
-    );
-
-    const toggleThreadHistory = useCallback(() => {
-      setIsThreadHistoryOpen((prev) => !prev);
-    }, []);
 
     const hasMessages = messages.length > 0;
 

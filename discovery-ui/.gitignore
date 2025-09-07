@@ -47,5 +47,6 @@ next-env.d.ts
 /playwright-report
 
 # docs
-langgraph-platform.json
-VERCEL_LANGGRAPH_TEMPLATE.md
+docs/langgraph-platform.json
+docs/VERCEL_LANGGRAPH_TEMPLATE.md
+docs/LANGGRAPH_DEEPAGENT_UI.md

@@ -1,21 +1,99 @@
-export interface Attachment {
-  url: string;
+export interface ToolCall {
+  id: string;
   name: string;
-  contentType: string;
+  args: any;
+  result?: string;
+  status: "pending" | "completed" | "error";
 }
 
-import type { UIMessage } from 'ai';
+export interface SubAgent {
+  id: string;
+  name: string;
+  subAgentName: string;
+  input: any;
+  output?: any;
+  status: "pending" | "active" | "completed" | "error";
+}
 
-export interface ChatMessage extends UIMessage {
-  attachments?: Attachment[];
+export interface FileItem {
+  path: string;
+  content: string;
+}
+
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: "pending" | "in_progress" | "completed";
   createdAt?: Date;
+  updatedAt?: Date;
 }
 
-export interface CustomUIDataTypes {
-  'data-id': string;
-  'data-title': string;
-  'data-kind': string;
-  'data-clear': boolean;
-  'data-finish': boolean;
-  [key: string]: any; // Add index signature for extensibility
+export interface Thread {
+  id: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Message types for LangGraph SDK compatibility
+export interface ChatMessage {
+  id?: string;
+  role?: "user" | "assistant" | "system";
+  content: any;
+  createdAt?: Date;
+  parts?: any[];
+}
+
+// Extended message type for deep agent features
+export interface ExtendedMessage extends ChatMessage {
+  toolCalls?: ToolCall[];
+  subAgents?: SubAgent[];
+  files?: FileItem[];
+}
+
+// State type for LangGraph agent
+export interface AgentState extends Record<string, unknown> {
+  messages: ChatMessage[];
+  todos: TodoItem[];
+  files: Record<string, string>;
+  subAgents: SubAgent[];
+}
+
+// UI-specific types
+export interface VisibilityType {
+  type: "public" | "private";
+}
+
+export interface ChatModel {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+// Error types
+export interface ChatError {
+  message: string;
+  code?: string;
+  details?: any;
+}
+
+// Streaming types
+export interface StreamEvent {
+  type: "message" | "tool_call" | "subagent" | "file" | "error";
+  data: any;
+}
+
+// Sidebar types
+export interface SidebarState {
+  isOpen: boolean;
+  activeTab: "tasks" | "files" | "history";
+}
+
+// Artifact types (preserved from existing)
+export interface Artifact {
+  id: string;
+  title: string;
+  content: string;
+  type: "text" | "code" | "image" | "sheet";
+  createdAt: Date;
 }

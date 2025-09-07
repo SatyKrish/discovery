@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, Suspense } from "react";
 import { useQueryState } from "nuqs";
 import { ChatInterface } from "@/components/ChatInterface";
-import type { SubAgent, TodoItem } from "@/types/types";
+import type { SubAgent, TodoItem } from "@/lib/types";
 
-export default function HomePage() {
+function HomePageContent() {
   const [threadId, setThreadId] = useQueryState("threadId");
   const [selectedSubAgent, setSelectedSubAgent] = useState<SubAgent | null>(null);
   const [todos, setTodos] = useState<TodoItem[]>([]);
@@ -30,5 +30,13 @@ export default function HomePage() {
       onNewThread={handleNewThread}
       isLoadingThreadState={isLoadingThreadState}
     />
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HomePageContent />
+    </Suspense>
   );
 }

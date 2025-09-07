@@ -9,7 +9,7 @@ import {
   AlertCircle,
   Loader,
 } from "lucide-react";
-import type { ToolCall } from "@/types/types";
+import type { ToolCall } from "@/lib/types";
 
 interface ToolCallBoxProps {
   toolCall: ToolCall;

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { CheckCircle, AlertCircle, Clock, Loader } from "lucide-react";
-import type { SubAgent } from "@/types/types";
+import type { SubAgent } from "@/lib/types";
 
 interface SubAgentIndicatorProps {
   subAgent: SubAgent;

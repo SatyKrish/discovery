@@ -1,5 +1,5 @@
 import type { ChatMessage } from '@/lib/types';
-import { MemoizedMarkdown } from './MemoizedMarkdown';
+import { MarkdownContent } from './MarkdownContent';
 import { cn } from '@/lib/utils';
 
 export function ChatMessageBubble(props: { message: ChatMessage; aiEmoji?: string }) {
@@ -12,9 +12,8 @@ export function ChatMessageBubble(props: { message: ChatMessage; aiEmoji?: strin
       )}
     >
       <div className="chat-message-bubble whitespace-pre-wrap flex flex-col prose max-w-none overflow-x-auto">
-        <MemoizedMarkdown
+        <MarkdownContent
           content={props.message.parts?.find(part => part.type === 'text')?.text || 'Message content'}
-          id={props.message.id}
         />
       </div>
     </div>

@@ -5,9 +5,9 @@ import { User, Bot } from "lucide-react";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ToolCallBox } from "./ToolCallBox";
 import { MarkdownContent } from "./MarkdownContent";
-import type { SubAgent, ToolCall } from "@/types/types";
+import type { SubAgent, ToolCall } from "@/lib/types";
 import { Message } from "@langchain/langgraph-sdk";
-import { extractStringFromMessageContent } from "@/utils/utils";
+import { extractStringFromMessageContent } from "@/lib/utils";
 
 interface ChatMessageProps {
   message: Message;

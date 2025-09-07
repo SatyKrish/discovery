@@ -5,8 +5,8 @@ import { MessageSquare, X } from "lucide-react";
 import { createClient } from "@/lib/client";
 import { useAuthContext } from "@/providers/Auth";
 import { getDeployment } from "@/lib/environment/deployments";
-import type { Thread } from "@/types/types";
-import { extractStringFromMessageContent } from "@/utils/utils";
+import type { Thread } from "@/lib/types";
+import { extractStringFromMessageContent } from "@/lib/utils";
 
 interface ThreadHistorySidebarProps {
   open: boolean;

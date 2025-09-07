@@ -3,7 +3,7 @@ import { useStream } from "@langchain/langgraph-sdk/react";
 import { type Message } from "@langchain/langgraph-sdk";
 import { getDeployment } from "@/lib/environment/deployments";
 import { v4 as uuidv4 } from "uuid";
-import type { TodoItem, AgentState } from "@/types/types";
+import type { TodoItem, AgentState } from "@/lib/types";
 import { createClient } from "@/lib/client";
 import { useAuthContext } from "@/providers/Auth";
 
@@ -40,7 +40,7 @@ export function useChat(
     [onTodosUpdate, onFilesUpdate],
   );
 
-  const stream = useStream<AgentState>({
+  const stream = useStream<AgentState & Record<string, unknown>>({
     assistantId: agentId,
     client: createClient(accessToken || ""),
     reconnectOnMount: true,
@@ -58,7 +58,8 @@ export function useChat(
         id: uuidv4(),
         type: "human",
         content: message,
-      };
+        role: "user",
+      } as Message;
       stream.submit(
         { messages: [humanMessage] },
         {

@@ -13,10 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Send, Bot, LoaderCircle, SquarePen, History, X } from "lucide-react";
 import { ChatMessage } from "./ChatMessage";
 import { ThreadHistorySidebar } from "./ThreadHistorySidebar";
-import type { SubAgent, TodoItem, ToolCall } from "@/types/types";
+import type { SubAgent, TodoItem, ToolCall } from "@/lib/types";
 import { useChat } from "@/hooks/useChat";
 import { Message } from "@langchain/langgraph-sdk";
-import { extractStringFromMessageContent } from "@/utils/utils";
+import { extractStringFromMessageContent } from "@/lib/utils";
 
 interface ChatInterfaceProps {
   threadId: string | null;

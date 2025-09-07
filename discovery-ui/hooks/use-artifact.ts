@@ -1,7 +1,22 @@
 'use client';
 
 import useSWR from 'swr';
-import type { ArtifactKind, UIArtifact } from '@/components/artifact';
+export type ArtifactKind = 'text' | 'code' | 'image' | 'sheet';
+
+export interface UIArtifact {
+  title: string;
+  documentId: string;
+  kind: ArtifactKind;
+  content: string;
+  isVisible: boolean;
+  status: 'idle' | 'streaming' | 'complete';
+  boundingBox: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  };
+}
 import { useCallback, useMemo } from 'react';
 
 export const initialArtifactData: UIArtifact = {

@@ -1,11 +1,24 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
+import { ThemeProvider } from '@/components/theme-provider';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/app-sidebar';
 import { AuthProvider } from '@/providers/Auth';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { Toaster } from 'sonner';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const geist = Geist({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-geist',
+});
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-geist-mono',
+});
 
 export const metadata: Metadata = {
   title: 'Discovery Agent',
@@ -18,13 +31,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html
+      lang="en"
+      className={`${geist.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="antialiased">
         <AuthProvider>
-          <NuqsAdapter>
-            {children}
-          </NuqsAdapter>
-          <Toaster position="top-right" />
+          <ThemeProvider defaultTheme="system">
+            <NuqsAdapter>
+              {children}
+            </NuqsAdapter>
+            <Toaster position="top-right" />
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>

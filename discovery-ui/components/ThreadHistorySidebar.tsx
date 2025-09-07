@@ -14,10 +14,12 @@ interface ThreadHistorySidebarProps {
   setOpen: (open: boolean) => void;
   currentThreadId: string | null;
   onThreadSelect: (threadId: string) => void;
+  searchQuery?: string;
+  dateFilter?: 'all' | 'today' | 'week' | 'month';
 }
 
 export const ThreadHistorySidebar = React.memo<ThreadHistorySidebarProps>(
-  ({ open, setOpen, currentThreadId, onThreadSelect }) => {
+  ({ open, setOpen, currentThreadId, onThreadSelect, searchQuery = '', dateFilter = 'all' }) => {
     const [threads, setThreads] = useState<Thread[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { session } = useAuthContext();
@@ -77,6 +79,40 @@ export const ThreadHistorySidebar = React.memo<ThreadHistorySidebarProps>(
       }
     }, [open, fetchThreads]);
 
+    // Filter threads based on search and date
+    const filteredThreads = useMemo(() => {
+      let filtered = threads;
+
+      // Text search
+      if (searchQuery.trim()) {
+        filtered = filtered.filter((thread) =>
+          thread.title.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+
+      // Date filter
+      if (dateFilter !== 'all') {
+        const now = new Date();
+        const filterDate = new Date();
+
+        switch (dateFilter) {
+          case 'today':
+            filterDate.setHours(0, 0, 0, 0);
+            break;
+          case 'week':
+            filterDate.setDate(now.getDate() - 7);
+            break;
+          case 'month':
+            filterDate.setMonth(now.getMonth() - 1);
+            break;
+        }
+
+        filtered = filtered.filter((thread) => thread.updatedAt >= filterDate);
+      }
+
+      return filtered;
+    }, [threads, searchQuery, dateFilter]);
+
     const groupedThreads = useMemo(() => {
       const groups: Record<string, Thread[]> = {
         today: [],
@@ -85,7 +121,7 @@ export const ThreadHistorySidebar = React.memo<ThreadHistorySidebarProps>(
         older: [],
       };
       const now = new Date();
-      threads.forEach((thread) => {
+      filteredThreads.forEach((thread) => {
         const diff = now.getTime() - thread.updatedAt.getTime();
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         if (days === 0) groups.today.push(thread);
@@ -94,7 +130,7 @@ export const ThreadHistorySidebar = React.memo<ThreadHistorySidebarProps>(
         else groups.older.push(thread);
       });
       return groups;
-    }, [threads]);
+    }, [filteredThreads]);
 
     const sidebarContent = (
       <div className="flex flex-col h-full">

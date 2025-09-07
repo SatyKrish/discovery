@@ -181,7 +181,8 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
     }, [messages]);
 
     return (
-      <div className="flex flex-col h-screen w-full bg-background">
+      <div className="flex flex-col h-full w-full bg-background">
+        {/* Header */}
         <div className="flex justify-between items-center px-4 md:px-6 py-4 border-b border-border bg-background flex-shrink-0">
           <div className="flex items-center gap-3">
             <Bot className="w-6 h-6 text-primary" />
@@ -197,24 +198,11 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
             >
               <SquarePen size={18} />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleThreadHistory}
-              className="h-9 w-9"
-              data-testid="sidebar-toggle-button"
-            >
-              <History size={18} />
-            </Button>
           </div>
         </div>
-        <div className="flex flex-1 min-h-0 relative">
-          <ThreadHistorySidebar
-            open={isThreadHistoryOpen}
-            setOpen={setIsThreadHistoryOpen}
-            currentThreadId={threadId}
-            onThreadSelect={handleThreadSelect}
-          />
+
+        {/* Main Content Area */}
+        <div className="flex flex-1 min-h-0">
           <div className="flex flex-col flex-1 min-h-0">
             {!hasMessages && !isLoading && !isLoadingThreadState && (
               <div className="flex flex-col items-center justify-center h-full px-4 md:px-8 text-center">
@@ -249,6 +237,8 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
             </div>
           </div>
         </div>
+
+        {/* Input Form */}
         <form onSubmit={handleSubmit} className="flex gap-2 md:gap-3 px-4 md:px-6 py-4 border-t border-border bg-background flex-shrink-0">
           <Input
             value={input}

@@ -3,6 +3,8 @@
 import React, { useState, useCallback, Suspense } from "react";
 import { useQueryState } from "nuqs";
 import { ChatInterface } from "@/components/ChatInterface";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import type { SubAgent, TodoItem } from "@/lib/types";
 
 function HomePageContent() {
@@ -19,17 +21,33 @@ function HomePageContent() {
     setFiles({});
   }, [setThreadId]);
 
+  const handleThreadSelect = useCallback((selectedThreadId: string) => {
+    setThreadId(selectedThreadId);
+    setSelectedSubAgent(null);
+  }, [setThreadId]);
+
   return (
-    <ChatInterface
-      threadId={threadId}
-      selectedSubAgent={selectedSubAgent}
-      setThreadId={setThreadId}
-      onSelectSubAgent={setSelectedSubAgent}
-      onTodosUpdate={setTodos}
-      onFilesUpdate={setFiles}
-      onNewThread={handleNewThread}
-      isLoadingThreadState={isLoadingThreadState}
-    />
+    <div className="flex h-screen w-full">
+      <SidebarProvider>
+        <AppSidebar
+          currentThreadId={threadId}
+          onThreadSelect={handleThreadSelect}
+          onNewThread={handleNewThread}
+        />
+        <SidebarInset>
+          <ChatInterface
+            threadId={threadId}
+            selectedSubAgent={selectedSubAgent}
+            setThreadId={setThreadId}
+            onSelectSubAgent={setSelectedSubAgent}
+            onTodosUpdate={setTodos}
+            onFilesUpdate={setFiles}
+            onNewThread={handleNewThread}
+            isLoadingThreadState={isLoadingThreadState}
+          />
+        </SidebarInset>
+      </SidebarProvider>
+    </div>
   );
 }
 

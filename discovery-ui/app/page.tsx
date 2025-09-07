@@ -3,7 +3,7 @@
 import React, { useState, useCallback, Suspense } from "react";
 import { useQueryState } from "nuqs";
 import { ChatInterface } from "@/components/ChatInterface";
-import { AppSidebar } from "@/components/app-sidebar";
+import { DiscoverySidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import type { SubAgent, TodoItem } from "@/lib/types";
 
@@ -29,7 +29,7 @@ function HomePageContent() {
   return (
     <div className="flex h-screen w-full">
       <SidebarProvider>
-        <AppSidebar
+        <DiscoverySidebar
           currentThreadId={threadId}
           onThreadSelect={handleThreadSelect}
           onNewThread={handleNewThread}

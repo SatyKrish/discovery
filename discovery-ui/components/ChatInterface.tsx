@@ -29,6 +29,7 @@ interface ChatInterfaceProps {
   onTodosUpdate: (todos: TodoItem[]) => void;
   onFilesUpdate: (files: Record<string, string>) => void;
   onNewThread: () => void;
+  onThreadCreated?: (threadId: string) => void;
   isLoadingThreadState: boolean;
 }
 
@@ -41,6 +42,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
     onTodosUpdate,
     onFilesUpdate,
     onNewThread,
+    onThreadCreated,
     isLoadingThreadState,
   }) => {
     const [input, setInput] = useState("");
@@ -52,6 +54,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
       setThreadId,
       onTodosUpdate,
       onFilesUpdate,
+      onThreadCreated,
     );
 
     useEffect(() => {

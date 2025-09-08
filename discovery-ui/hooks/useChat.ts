@@ -14,6 +14,7 @@ export function useChat(
   ) => void,
   onTodosUpdate: (todos: TodoItem[]) => void,
   onFilesUpdate: (files: Record<string, string>) => void,
+  onThreadCreated?: (threadId: string) => void,
 ) {
   const agent = useMemo(() => getAgent(), []);
 
@@ -38,13 +39,22 @@ export function useChat(
     [onTodosUpdate, onFilesUpdate],
   );
 
+  const handleThreadId = useCallback((newThreadId: string | null) => {
+    // Call the original setThreadId
+    setThreadId(newThreadId);
+    // If a new thread was created (threadId was null and now has a value), notify
+    if (onThreadCreated && threadId === null && newThreadId !== null) {
+      onThreadCreated(newThreadId);
+    }
+  }, [setThreadId, threadId, onThreadCreated]);
+
   const stream = useStream<AgentState & Record<string, unknown>>({
     assistantId: agentId,
     client: createClient(),
     reconnectOnMount: true,
     threadId: threadId ?? null,
     onUpdateEvent: handleUpdateEvent,
-    onThreadId: setThreadId,
+    onThreadId: handleThreadId,
     defaultHeaders: {
       "x-auth-scheme": "langsmith",
     },

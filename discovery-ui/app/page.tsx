@@ -26,6 +26,11 @@ function HomePageContent() {
     setSelectedSubAgent(null);
   }, [setThreadId]);
 
+  const handleThreadCreated = useCallback((newThreadId: string) => {
+    console.log('Thread created in parent:', newThreadId);
+    // The sidebar will handle refreshing its own thread list
+  }, []);
+
   return (
     <div className="flex h-screen w-full">
       <SidebarProvider>
@@ -33,6 +38,7 @@ function HomePageContent() {
           currentThreadId={threadId}
           onThreadSelect={handleThreadSelect}
           onNewThread={handleNewThread}
+          onThreadCreated={handleThreadCreated}
         />
         <SidebarInset>
           <ChatInterface
@@ -43,6 +49,7 @@ function HomePageContent() {
             onTodosUpdate={setTodos}
             onFilesUpdate={setFiles}
             onNewThread={handleNewThread}
+            onThreadCreated={handleThreadCreated}
             isLoadingThreadState={isLoadingThreadState}
           />
         </SidebarInset>

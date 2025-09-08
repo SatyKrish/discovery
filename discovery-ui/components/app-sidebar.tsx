@@ -45,11 +45,12 @@ interface DiscoverySidebarProps {
   currentThreadId?: string | null;
   onThreadSelect?: (threadId: string) => void;
   onNewThread?: () => void;
+  onThreadCreated?: (threadId: string) => void;
 }
 
 type DateFilter = 'all' | 'today' | 'week' | 'month';
 
-export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNewThread }: DiscoverySidebarProps) {
+export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNewThread, onThreadCreated }: DiscoverySidebarProps) {
   const router = useRouter();
   const { setOpenMobile, toggleSidebar } = useSidebar();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -194,6 +195,8 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
     if (onNewThread) {
       onNewThread();
     }
+    // Refresh the thread list immediately when New Chat is clicked
+    fetchThreads();
     // Close mobile sidebar after creating new thread
     setOpenMobile(false);
   };
@@ -223,6 +226,13 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
       }
     }
   }, [currentThreadId, onNewThread]);
+
+  // Handle thread creation - refresh the thread list
+  const handleThreadCreated = useCallback((threadId: string) => {
+    console.log('New thread created:', threadId);
+    // Refresh the thread list to show the new thread
+    fetchThreads();
+  }, [fetchThreads]);
 
   return (
     <Sidebar className="group-data-[side=left]:border-r-0">

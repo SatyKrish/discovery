@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { type Message } from "@langchain/langgraph-sdk";
-import { getDeployment } from "@/lib/environment/deployments";
+import { getAgent } from "@/lib/config";
 import { v4 as uuidv4 } from "uuid";
 import type { TodoItem, AgentState } from "@/lib/types";
 import { createClient } from "@/lib/client";
@@ -15,14 +15,14 @@ export function useChat(
   onTodosUpdate: (todos: TodoItem[]) => void,
   onFilesUpdate: (files: Record<string, string>) => void,
 ) {
-  const deployment = useMemo(() => getDeployment(), []);
+  const agent = useMemo(() => getAgent(), []);
 
   const agentId = useMemo(() => {
-    if (!deployment?.agentId) {
+    if (!agent?.agentId) {
       throw new Error(`No agent ID configured in environment`);
     }
-    return deployment.agentId;
-  }, [deployment]);
+    return agent.agentId;
+  }, [agent]);
 
   const handleUpdateEvent = useCallback(
     (data: { [node: string]: Partial<AgentState> }) => {

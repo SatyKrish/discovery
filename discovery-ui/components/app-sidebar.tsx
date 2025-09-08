@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/lib/client';
 
-import { getDeployment } from '@/lib/environment/deployments';
+import { getAgent } from '@/lib/config';
 import type { Thread } from '@/lib/types';
 import { extractStringFromMessageContent } from '@/lib/utils';
 import Link from 'next/link';
@@ -46,7 +46,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const deployment = useMemo(() => getDeployment(), []);
+  const agent = useMemo(() => getAgent(), []);
 
   // Add keyboard shortcut support (Cmd/Ctrl + B to toggle sidebar)
   useEffect(() => {
@@ -63,7 +63,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
-    if (!deployment?.deploymentUrl) return;
+    if (!agent?.apiUrl) return;
     setIsLoading(true);
     try {
       const client = createClient();
@@ -108,7 +108,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
     } finally {
       setIsLoading(false);
     }
-  }, [deployment?.deploymentUrl, sidebarOpen]);
+  }, [agent?.apiUrl, sidebarOpen]);
 
   useEffect(() => {
     if (sidebarOpen) {

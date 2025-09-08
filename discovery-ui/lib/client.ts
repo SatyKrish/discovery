@@ -1,10 +1,10 @@
 import { Client } from "@langchain/langgraph-sdk";
-import { getDeployment } from "./environment/deployments";
+import { getAgent } from "./config";
 
 export function createClient(accessToken?: string) {
-  const deployment = getDeployment();
+  const agent = getAgent();
   const clientConfig: any = {
-    apiUrl: deployment?.deploymentUrl || "http://127.0.0.1:2024",
+    apiUrl: agent?.apiUrl || "http://127.0.0.1:2024",
   };
 
   // Only add auth if accessToken is provided and not empty

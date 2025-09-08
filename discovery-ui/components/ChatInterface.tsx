@@ -12,7 +12,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { Send, Bot, LoaderCircle, SquarePen, Sun, Moon, Monitor } from "lucide-react";
+import { Send, LoaderCircle, SquarePen, Sun, Moon, Monitor } from "lucide-react";
+import { Logo } from "@/components/logo";
 import { ChatMessage } from "./ChatMessage";
 import { SuggestedActions } from "./SuggestedActions";
 import type { SubAgent, TodoItem, ToolCall } from "@/lib/types";
@@ -203,7 +204,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
                 className="flex flex-row gap-3 items-center"
               >
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
-                  <Bot className="w-5 h-5 text-primary" />
+                  <Logo size={20} className="text-primary" />
                 </div>
                 <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer text-foreground">
                   Discovery

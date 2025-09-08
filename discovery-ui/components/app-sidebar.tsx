@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Bot, Plus, Search, Filter, MessageSquare, X, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, MessageSquare, X, Trash2 } from 'lucide-react';
+import { Logo } from '@/components/logo';
 
 import {
   Sidebar,
@@ -247,7 +248,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
               className="flex flex-row gap-3 items-center"
             >
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
-                <Bot className="w-5 h-5 text-primary" />
+                <Logo size={20} className="text-primary" />
               </div>
               <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer">
                 Discovery

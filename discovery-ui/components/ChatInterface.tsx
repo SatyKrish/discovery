@@ -8,9 +8,11 @@ import React, {
   useEffect,
   FormEvent,
 } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, LoaderCircle, SquarePen } from "lucide-react";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { Send, Bot, LoaderCircle, SquarePen } from "lucide-react";
 import { ChatMessage } from "./ChatMessage";
 import type { SubAgent, TodoItem, ToolCall } from "@/lib/types";
 import { useChat } from "@/hooks/useChat";
@@ -43,6 +45,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
   }) => {
     const [input, setInput] = useState("");
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const { state: sidebarState, setOpenMobile } = useSidebar();
 
     const { messages, isLoading, sendMessage, stopStream } = useChat(
       threadId,
@@ -168,8 +171,32 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
     return (
       <div className="flex flex-col h-full w-full bg-background">
         {/* Header */}
-        <div className="flex justify-end items-center px-4 md:px-6 py-4 border-b border-border bg-background flex-shrink-0">
-          <div className="flex items-center gap-2">
+        <div className="relative flex items-center px-4 md:px-6 py-4 border-b border-border bg-background flex-shrink-0">
+          {/* Left side content - branding when sidebar collapsed */}
+          <div className="flex items-center gap-3">
+            {sidebarState === 'collapsed' && (
+              <Link
+                href="/"
+                onClick={() => {
+                  setOpenMobile(false);
+                }}
+                className="flex flex-row gap-3 items-center"
+              >
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
+                  <Bot className="w-5 h-5 text-primary" />
+                </div>
+                <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer">
+                  Discovery Agent
+                </span>
+              </Link>
+            )}
+            {sidebarState === 'collapsed' && (
+              <SidebarTrigger className="h-8 w-8" />
+            )}
+          </div>
+
+          {/* New Chat button always in top right corner */}
+          <div className="absolute right-4 md:right-6">
             <Button
               variant="ghost"
               size="icon"

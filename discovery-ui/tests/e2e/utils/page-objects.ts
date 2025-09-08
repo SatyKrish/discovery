@@ -33,9 +33,9 @@ export class ChatPage {
     return this.page.getByTestId('scroll-to-bottom-button');
   }
 
-  // Header elements - Theme toggle is in the sidebar component
+  // Header elements - Theme toggle is in the chat interface header
   get themeToggle(): Locator {
-    return this.page.locator('[data-sidebar="sidebar"]').getByRole('button', { name: /theme|dark|light/i });
+    return this.page.locator('button[title*="theme"]').first();
   }
 
   get sidebarToggle(): Locator {

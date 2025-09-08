@@ -12,10 +12,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { Send, Bot, LoaderCircle, SquarePen } from "lucide-react";
+import { Send, Bot, LoaderCircle, SquarePen, Sun, Moon, Monitor } from "lucide-react";
 import { ChatMessage } from "./ChatMessage";
 import type { SubAgent, TodoItem, ToolCall } from "@/lib/types";
 import { useChat } from "@/hooks/useChat";
+import { useTheme } from "@/components/theme-provider";
 import { Message } from "@langchain/langgraph-sdk";
 import { extractStringFromMessageContent } from "@/lib/utils";
 
@@ -48,6 +49,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
     const [input, setInput] = useState("");
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const { state: sidebarState, setOpenMobile } = useSidebar();
+    const { theme, setTheme } = useTheme();
 
     const { messages, isLoading, sendMessage, stopStream } = useChat(
       threadId,
@@ -79,6 +81,16 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
       }
       onNewThread();
     }, [isLoading, stopStream, onNewThread]);
+
+    const handleThemeToggle = useCallback(() => {
+      if (theme === 'light') {
+        setTheme('dark');
+      } else if (theme === 'dark') {
+        setTheme('system');
+      } else {
+        setTheme('light');
+      }
+    }, [theme, setTheme]);
 
     const hasMessages = messages.length > 0;
 
@@ -188,7 +200,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
                   <Bot className="w-5 h-5 text-primary" />
                 </div>
-                <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer">
+                <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer text-foreground">
                   Discovery Agent
                 </span>
               </Link>
@@ -198,8 +210,19 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
             )}
           </div>
 
-          {/* New Chat button always in top right corner */}
-          <div className="absolute right-4 md:right-6">
+          {/* Action buttons in top right corner */}
+          <div className="absolute right-4 md:right-6 flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleThemeToggle}
+              className="h-9 w-9"
+              title={`Current theme: ${theme}. Click to cycle themes.`}
+            >
+              {theme === 'light' && <Sun size={18} />}
+              {theme === 'dark' && <Moon size={18} />}
+              {theme === 'system' && <Monitor size={18} />}
+            </Button>
             <Button
               variant="ghost"
               size="icon"

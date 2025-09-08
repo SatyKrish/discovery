@@ -171,7 +171,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
     return (
       <div className="flex flex-col h-full w-full bg-background">
         {/* Header */}
-        <div className="relative flex items-center px-4 md:px-6 py-4 border-b border-border bg-background flex-shrink-0">
+        <div className="relative flex items-center px-4 md:px-6 py-4 bg-background flex-shrink-0">
           {/* Left side content - branding when sidebar collapsed */}
           <div className="flex items-center gap-3">
             {sidebarState === 'collapsed' && (

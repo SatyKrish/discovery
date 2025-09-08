@@ -206,7 +206,7 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
                   <Bot className="w-5 h-5 text-primary" />
                 </div>
                 <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer text-foreground">
-                  Discovery Agent
+                  Discovery
                 </span>
               </Link>
             )}

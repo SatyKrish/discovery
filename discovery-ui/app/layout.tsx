@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Discovery Agent',
+  title: 'Discovery',
   description: 'AI-powered deep agent system for discovery and analysis',
 };
 

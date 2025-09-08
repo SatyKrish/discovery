@@ -250,7 +250,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
                 <Bot className="w-5 h-5 text-primary" />
               </div>
               <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer">
-                Discovery Agent
+                Discovery
               </span>
             </Link>
             <SidebarTrigger className="h-8 w-8" />

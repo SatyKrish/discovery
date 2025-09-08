@@ -12,6 +12,7 @@ import {
   SidebarMenu,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -242,6 +243,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
                 Discovery Agent
               </span>
             </Link>
+            <SidebarTrigger className="h-8 w-8" />
           </div>
         </SidebarMenu>
       </SidebarHeader>

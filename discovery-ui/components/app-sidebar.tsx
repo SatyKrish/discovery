@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Bot, Plus, Search, Filter, MessageSquare, X } from 'lucide-react';
+import { Bot, Plus, Search, Filter, MessageSquare, X, Trash2 } from 'lucide-react';
 
 import {
   Sidebar,
@@ -22,6 +22,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { createClient } from '@/lib/client';
 
 import { getAgent } from '@/lib/config';
@@ -186,6 +197,32 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
     setOpenMobile(false);
   };
 
+  const handleDeleteThread = useCallback(async (threadId: string) => {
+    try {
+      const client = createClient();
+      // Try to delete the thread using LangGraph client
+      // If delete method doesn't exist, we'll need to implement a custom solution
+      await client.threads.delete(threadId);
+
+      // Remove from local state
+      setThreads(prev => prev.filter(thread => thread.id !== threadId));
+
+      // If the deleted thread was the current one, create a new thread
+      if (threadId === currentThreadId && onNewThread) {
+        onNewThread();
+      }
+    } catch (error) {
+      console.error("Failed to delete thread:", error);
+      // For now, just remove from local state as fallback
+      // In production, you might want to show an error message
+      setThreads(prev => prev.filter(thread => thread.id !== threadId));
+
+      if (threadId === currentThreadId && onNewThread) {
+        onNewThread();
+      }
+    }
+  }, [currentThreadId, onNewThread]);
+
   return (
     <Sidebar className="group-data-[side=left]:border-r-0">
       <SidebarHeader>
@@ -293,6 +330,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
                           thread={thread}
                           isActive={thread.id === currentThreadId}
                           onClick={() => handleThreadSelect(thread.id)}
+                          onDelete={handleDeleteThread}
                         />
                       ))}
                     </div>
@@ -308,6 +346,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
                           thread={thread}
                           isActive={thread.id === currentThreadId}
                           onClick={() => handleThreadSelect(thread.id)}
+                          onDelete={handleDeleteThread}
                         />
                       ))}
                     </div>
@@ -323,6 +362,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
                           thread={thread}
                           isActive={thread.id === currentThreadId}
                           onClick={() => handleThreadSelect(thread.id)}
+                          onDelete={handleDeleteThread}
                         />
                       ))}
                     </div>
@@ -338,6 +378,7 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
                           thread={thread}
                           isActive={thread.id === currentThreadId}
                           onClick={() => handleThreadSelect(thread.id)}
+                          onDelete={handleDeleteThread}
                         />
                       ))}
                     </div>
@@ -359,29 +400,82 @@ export function DiscoverySidebar({ currentThreadId = null, onThreadSelect, onNew
 }
 
 // Thread Item Component
-const ThreadItem = ({ thread, isActive, onClick }: {
+const ThreadItem = ({
+  thread,
+  isActive,
+  onClick,
+  onDelete
+}: {
   thread: Thread;
   isActive: boolean;
   onClick: () => void;
+  onDelete: (threadId: string) => void;
 }) => {
+  const [showDelete, setShowDelete] = useState(false);
+
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left p-3 rounded-lg mb-1 transition-colors ${
+    <div
+      className={`relative w-full rounded-lg mb-1 transition-colors group ${
         isActive
           ? 'bg-primary text-primary-foreground'
           : 'hover:bg-muted text-foreground'
       }`}
+      onMouseEnter={() => setShowDelete(true)}
+      onMouseLeave={() => setShowDelete(false)}
     >
-      <div className="flex items-start gap-3">
+      <button
+        onClick={onClick}
+        className="w-full text-left p-3 flex items-start gap-3"
+      >
         <MessageSquare size={16} className="mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">{thread.title}</div>
-          <div className="text-xs text-muted-foreground mt-1">
+          <div className={`text-xs mt-1 ${
+            isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'
+          }`}>
             {thread.updatedAt.toLocaleDateString()}
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+
+      {/* Delete button - only show on hover/focus */}
+      {(showDelete || isActive) && (
+        <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-8 w-8 p-0 ${
+                  isActive
+                    ? 'text-primary-foreground hover:bg-primary-foreground/20'
+                    : 'text-muted-foreground hover:bg-muted-foreground/20'
+                }`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Chat</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this chat? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => onDelete(thread.id)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
+    </div>
   );
 };

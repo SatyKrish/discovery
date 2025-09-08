@@ -23,7 +23,7 @@ export class TestHelpers {
    */
   async waitForGenerationComplete() {
     await this.page.waitForResponse((response) =>
-      response.url().includes('/api/chat') && response.status() === 200
+      response.url().includes('/api/langgraph') && response.status() === 200
     );
   }
 
@@ -35,27 +35,27 @@ export class TestHelpers {
   }
 
   /**
-   * Check if URL contains chat ID
+   * Check if URL contains chat ID (now using query parameters)
    */
   hasChatIdInUrl(): boolean {
-    const path = this.getCurrentPath();
-    return /^\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(path);
+    const url = new URL(this.page.url());
+    const threadId = url.searchParams.get('threadId');
+    return threadId !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(threadId);
   }
 
   /**
-   * Extract chat ID from URL
+   * Extract chat ID from URL (now using query parameters)
    */
   getChatIdFromUrl(): string | null {
-    const path = this.getCurrentPath();
-    const match = path.match(/^\/chat\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
-    return match ? match[1] : null;
+    const url = new URL(this.page.url());
+    return url.searchParams.get('threadId');
   }
 
   /**
    * Mock API responses for testing
    */
   async mockChatAPI(response: any) {
-    await this.page.route('/api/chat', async route => {
+    await this.page.route('**/api/langgraph/**', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'text/plain',
@@ -133,9 +133,9 @@ export class TestHelpers {
   }
 
   /**
-   * Wait for URL to match pattern
+   * Wait for URL to match pattern or predicate
    */
-  async waitForUrl(pattern: RegExp | string) {
+  async waitForUrl(pattern: RegExp | string | ((url: URL) => boolean)) {
     await this.page.waitForURL(pattern);
   }
 

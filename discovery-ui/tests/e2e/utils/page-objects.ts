@@ -33,13 +33,13 @@ export class ChatPage {
     return this.page.getByTestId('scroll-to-bottom-button');
   }
 
-  // Header elements
+  // Header elements - Theme toggle is in the sidebar component
   get themeToggle(): Locator {
-    return this.page.getByTestId('theme-toggle');
+    return this.page.locator('[data-sidebar="sidebar"]').getByRole('button', { name: /theme|dark|light/i });
   }
 
   get sidebarToggle(): Locator {
-    return this.page.getByTestId('sidebar-toggle-button');
+    return this.page.locator('[data-sidebar="trigger"]');
   }
 
   // Message elements
@@ -81,7 +81,10 @@ export class ChatPage {
   }
 
   async waitForUrlToContainChatId() {
-    await this.helpers.waitForUrl(/^\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    await this.helpers.waitForUrl((url: URL) => {
+      const threadId = url.searchParams.get('threadId');
+      return threadId !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(threadId);
+    });
   }
 
   async hasChatIdInUrl(): Promise<boolean> {

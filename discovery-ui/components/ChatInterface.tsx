@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Send, Bot, LoaderCircle, SquarePen, Sun, Moon, Monitor } from "lucide-react";
 import { ChatMessage } from "./ChatMessage";
+import { SuggestedActions } from "./SuggestedActions";
 import type { SubAgent, TodoItem, ToolCall } from "@/lib/types";
 import { useChat } from "@/hooks/useChat";
 import { useTheme } from "@/components/theme-provider";
@@ -91,6 +92,10 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
         setTheme('light');
       }
     }, [theme, setTheme]);
+
+    const handleSuggestedAction = useCallback((prompt: string) => {
+      setInput(prompt);
+    }, []);
 
     const hasMessages = messages.length > 0;
 
@@ -239,9 +244,16 @@ export const ChatInterface = React.memo<ChatInterfaceProps>(
         <div className="flex flex-1 min-h-0">
           <div className="flex flex-col flex-1 min-h-0">
             {!hasMessages && !isLoading && !isLoadingThreadState && (
-              <div className="flex flex-col items-center justify-center h-full px-4 md:px-8 text-center">
-                <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-2">Start a conversation</h2>
-                <p className="text-sm md:text-base text-muted-foreground">Ask me anything and I'll help you discover insights.</p>
+              <div className="flex flex-col items-center justify-center h-full px-4 md:px-8 text-center space-y-8">
+                <div>
+                  <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-2">Start a conversation</h2>
+                  <p className="text-sm md:text-base text-muted-foreground">Ask me anything and I'll help you discover insights.</p>
+                </div>
+
+                <div className="w-full max-w-4xl">
+                  <h3 className="text-lg font-medium mb-6 text-foreground">Try these suggestions:</h3>
+                  <SuggestedActions onActionClick={handleSuggestedAction} />
+                </div>
               </div>
             )}
             {isLoadingThreadState && (
